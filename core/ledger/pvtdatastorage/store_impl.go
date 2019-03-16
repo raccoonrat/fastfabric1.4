@@ -11,7 +11,7 @@ import (
 	"sync"
 
 	"github.com/hyperledger/fabric/common/flogging"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/pvtdatapolicy"
@@ -21,11 +21,11 @@ import (
 var logger = flogging.MustGetLogger("pvtdatastorage")
 
 type provider struct {
-	dbProvider *leveldbhelper.Provider
+	dbProvider *dbhelper.Provider
 }
 
 type store struct {
-	db        *leveldbhelper.DBHandle
+	db        *dbhelper.DBHandle
 	ledgerid  string
 	btlPolicy pvtdatapolicy.BTLPolicy
 
@@ -63,8 +63,7 @@ type dataKey struct {
 
 // NewProvider instantiates a StoreProvider
 func NewProvider() Provider {
-	dbPath := ledgerconfig.GetPvtdataStorePath()
-	dbProvider := leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: dbPath})
+	dbProvider := dbhelper.NewProvider()
 	return &provider{dbProvider: dbProvider}
 }
 
@@ -114,7 +113,7 @@ func (s *store) Prepare(blockNum uint64, pvtData []*ledger.TxPvtData) error {
 		return &ErrIllegalArgs{fmt.Sprintf("Expected block number=%d, recived block number=%d", expectedBlockNum, blockNum)}
 	}
 
-	batch := leveldbhelper.NewUpdateBatch()
+	batch := dbhelper.NewUpdateBatch()
 	var err error
 	var keyBytes, valBytes []byte
 	dataEntries, expiryEntries, err := prepareStoreEntries(blockNum, pvtData, s.btlPolicy)
@@ -151,7 +150,7 @@ func (s *store) Commit() error {
 	}
 	committingBlockNum := s.nextBlockNum()
 	logger.Debugf("Committing private data for block [%d]", committingBlockNum)
-	batch := leveldbhelper.NewUpdateBatch()
+	batch := dbhelper.NewUpdateBatch()
 	batch.Delete(pendingCommitKey)
 	batch.Put(lastCommittedBlkkey, encodeLastCommittedBlockVal(committingBlockNum))
 	if err := s.db.WriteBatch(batch, true); err != nil {
@@ -161,7 +160,7 @@ func (s *store) Commit() error {
 	s.isEmpty = false
 	s.lastCommittedBlock = committingBlockNum
 	logger.Debugf("Committed private data for block [%d]", committingBlockNum)
-	s.performPurgeIfScheduled(committingBlockNum)
+	//s.performPurgeIfScheduled(committingBlockNum)
 	return nil
 }
 
@@ -240,7 +239,7 @@ func (s *store) InitLastCommittedBlock(blockNum uint64) error {
 	if !(s.isEmpty && !s.batchPending) {
 		return &ErrIllegalCall{"The private data store is not empty. InitLastCommittedBlock() function call is not allowed"}
 	}
-	batch := leveldbhelper.NewUpdateBatch()
+	batch := dbhelper.NewUpdateBatch()
 	batch.Put(lastCommittedBlkkey, encodeLastCommittedBlockVal(blockNum))
 	if err := s.db.WriteBatch(batch, true); err != nil {
 		return err
@@ -268,7 +267,7 @@ func (s *store) performPurgeIfScheduled(latestCommittedBlk uint64) {
 }
 
 func (s *store) purgeExpiredData(minBlkNum, maxBlkNum uint64) error {
-	batch := leveldbhelper.NewUpdateBatch()
+	batch := dbhelper.NewUpdateBatch()
 	expiryEntries, err := s.retrieveExpiryEntries(minBlkNum, maxBlkNum)
 	if err != nil {
 		return nil

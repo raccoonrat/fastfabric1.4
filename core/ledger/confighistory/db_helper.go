@@ -12,7 +12,7 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 )
 
 const (
@@ -31,24 +31,24 @@ type compositeKV struct {
 }
 
 type dbProvider struct {
-	*leveldbhelper.Provider
+	*dbhelper.Provider
 }
 
 type db struct {
-	*leveldbhelper.DBHandle
+	*dbhelper.DBHandle
 }
 
 type batch struct {
-	*leveldbhelper.UpdateBatch
+	*dbhelper.UpdateBatch
 }
 
 func newDBProvider(dbPath string) *dbProvider {
 	logger.Debugf("Opening db for config history: db path = %s", dbPath)
-	return &dbProvider{leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: dbPath})}
+	return &dbProvider{dbhelper.NewProvider()}
 }
 
 func newBatch() *batch {
-	return &batch{leveldbhelper.NewUpdateBatch()}
+	return &batch{dbhelper.NewUpdateBatch()}
 }
 
 func (p *dbProvider) getDB(id string) *db {

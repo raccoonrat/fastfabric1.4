@@ -8,10 +8,13 @@ package peer
 
 import (
 	"fmt"
+	"github.com/fabric_extension"
+	"github.com/fabric_extension/block_cache"
 	"net"
 	"runtime"
 	"sync"
 
+	configtxtest "github.com/hyperledger/fabric/common/configtx/test"
 	"github.com/hyperledger/fabric/common/channelconfig"
 	cc "github.com/hyperledger/fabric/common/config"
 	"github.com/hyperledger/fabric/common/configtx"
@@ -193,7 +196,7 @@ func Initialize(init func(string), ccp ccprovider.ChaincodeProvider, sccp sysccp
 	if nWorkers <= 0 {
 		nWorkers = runtime.NumCPU()
 	}
-	validationWorkersSemaphore = semaphore.NewWeighted(int64(nWorkers))
+	validationWorkersSemaphore = semaphore.NewWeighted(int64(fabric_extension.PipelineWidth))
 
 	pluginMapper = pm
 	chainInitializer = init
@@ -212,11 +215,11 @@ func Initialize(init func(string), ccp ccprovider.ChaincodeProvider, sccp sysccp
 			peerLogger.Debugf("Error while loading ledger %s with message %s. We continue to the next ledger rather than abort.", cid, err)
 			continue
 		}
-		if cb, err = getCurrConfigBlockFromLedger(ledger); err != nil {
-			peerLogger.Warningf("Failed to find config block on ledger %s(%s)", cid, err)
-			peerLogger.Debugf("Error while looking for config block on ledger %s with message %s. We continue to the next ledger rather than abort.", cid, err)
-			continue
-		}
+		//if cb, err = getCurrConfigBlockFromLedger(ledger); err != nil {
+		//	peerLogger.Warningf("Failed to find config block on ledger %s(%s)", cid, err)
+		//	peerLogger.Debugf("Error while looking for config block on ledger %s with message %s. We continue to the next ledger rather than abort.", cid, err)
+		//	continue
+		//}
 		// Create a chain if we get a valid ledger with config block
 		if err = createChain(cid, ledger, cb, ccp, sccp, pm); err != nil {
 			peerLogger.Warningf("Failed to load chain %s(%s)", cid, err)
@@ -273,7 +276,12 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 		return err
 	}
 
+	//FastFabric did not deal with configuration, so this is a hack to get the chain going
+
+	cb, _ = configtxtest.MakeGenesisBlock("testchainid")
+	blocks.Cache.Put(cb)
 	var bundle *channelconfig.Bundle
+	cid = "test"
 
 	if chanConf != nil {
 		bundle, err = channelconfig.NewBundle(cid, chanConf)

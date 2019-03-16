@@ -29,11 +29,11 @@ import (
 // The presence of first byte also allows to use the returned bytes as part of other larger byte array such as a
 // composite-key representation in db
 func EncodeOrderPreservingVarUint64(number uint64) []byte {
-	bytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(bytes, number)
+	encodedBytes := make([]byte, 9)
+	binary.BigEndian.PutUint64(encodedBytes[1:], number)
 	startingIndex := 0
 	size := 0
-	for i, b := range bytes {
+	for i, b := range encodedBytes[1:] {
 		if b != 0x00 {
 			startingIndex = i
 			size = 8 - i
@@ -44,10 +44,12 @@ func EncodeOrderPreservingVarUint64(number uint64) []byte {
 	if len(sizeBytes) > 1 {
 		panic(fmt.Errorf("[]sizeBytes should not be more than one byte because the max number it needs to hold is 8. size=%d", size))
 	}
-	encodedBytes := make([]byte, size+1)
-	encodedBytes[0] = sizeBytes[0]
-	copy(encodedBytes[1:], bytes[startingIndex:])
-	return encodedBytes
+	if size == 0{
+		return encodedBytes[len(encodedBytes)-1:]
+	}
+	encodedBytes[startingIndex] = sizeBytes[0]
+
+	return encodedBytes[startingIndex:]
 }
 
 // DecodeOrderPreservingVarUint64 decodes the number from the bytes obtained from method 'EncodeOrderPreservingVarUint64'.

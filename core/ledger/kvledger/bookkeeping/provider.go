@@ -9,7 +9,7 @@ package bookkeeping
 import (
 	"fmt"
 
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 )
 
@@ -24,23 +24,23 @@ const (
 // Provider provides handle to different bookkeepers for the given ledger
 type Provider interface {
 	// GetDBHandle returns a db handle that can be used for maintaining the bookkeeping of a given category
-	GetDBHandle(ledgerID string, cat Category) *leveldbhelper.DBHandle
+	GetDBHandle(ledgerID string, cat Category) *dbhelper.DBHandle
 	// Close closes the BookkeeperProvider
 	Close()
 }
 
 type provider struct {
-	dbProvider *leveldbhelper.Provider
+	dbProvider *dbhelper.Provider
 }
 
 // NewProvider instantiates a new provider
 func NewProvider() Provider {
-	dbProvider := leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: getInternalBookkeeperPath()})
+	dbProvider := dbhelper.NewProvider()
 	return &provider{dbProvider: dbProvider}
 }
 
 // GetDBHandle implements the function in the interface 'BookkeeperProvider'
-func (provider *provider) GetDBHandle(ledgerID string, cat Category) *leveldbhelper.DBHandle {
+func (provider *provider) GetDBHandle(ledgerID string, cat Category) *dbhelper.DBHandle {
 	return provider.dbProvider.GetDBHandle(fmt.Sprintf(ledgerID+"/%d", cat))
 }
 

@@ -58,7 +58,7 @@ func (app *App) Init(initialBalances map[string]int) (*common.Envelope, error) {
 	if pubSimBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
 		return nil, err
 	}
-	tx := constructTransaction(pubSimBytes)
+	tx := constructTransaction(app.name, pubSimBytes)
 	return tx, nil
 }
 
@@ -86,6 +86,7 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 		return nil, err
 	}
 	balTo := toInt(balToBytes)
+
 	txSimulator.SetState(app.name, fromAccount, toBytes(balFrom-transferAmt))
 	txSimulator.SetState(app.name, toAccount, toBytes(balTo+transferAmt))
 	var txSimulationResults *ledger.TxSimulationResults
@@ -98,7 +99,7 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 	}
 	// act as endorsing peer to create an Action with the SimulationResults
 	// then act as SDK to create a Transaction with the EndorsedAction
-	tx := constructTransaction(pubSimBytes)
+	tx := constructTransaction(app.name, pubSimBytes)
 	return tx, nil
 }
 
@@ -121,9 +122,9 @@ func (app *App) QueryBalances(accounts []string) ([]int, error) {
 	return balances, nil
 }
 
-func constructTransaction(simulationResults []byte) *common.Envelope {
+func constructTransaction(name string, simulationResults []byte) *common.Envelope {
 	ccid := &pb.ChaincodeID{
-		Name:    "foo",
+		Name:    name,
 		Version: "v1",
 	}
 	response := &pb.Response{Status: 200}

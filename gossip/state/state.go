@@ -8,6 +8,11 @@ package state
 
 import (
 	"bytes"
+	"context"
+	"github.com/fabric_extension"
+	"github.com/fabric_extension/block_cache"
+	"github.com/fabric_extension/commit"
+	"golang.org/x/sync/semaphore"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,6 +85,7 @@ type MCSAdapter interface {
 	// sequence number that the block's header contains.
 	// else returns error
 	VerifyBlock(chainID common2.ChainID, seqNum uint64, signedBlock []byte) error
+	VerifyBlockByNo(chainID common2.ChainID, seqNum uint64) error
 
 	// VerifyByChannel checks that signature is a valid signature of message
 	// under a peer's verification key, but also in the context of a specific channel.
@@ -93,6 +99,8 @@ type ledgerResources interface {
 	// StoreBlock deliver new block with underlined private data
 	// returns missing transaction ids
 	StoreBlock(block *common.Block, data util.PvtDataCollections) error
+
+	ValidateByNo(blockNo uint64) error
 
 	// StorePvtData used to persist private date into transient store
 	StorePvtData(txid string, privData *transientstore.TxPvtReadWriteSetWithConfigInfo, blckHeight uint64) error
@@ -184,11 +192,13 @@ func NewGossipStateProvider(chainID string, services *ServicesMediator, ledger l
 	_, commChan := services.Accept(remoteStateMsgFilter, true)
 
 	height, err := ledger.LedgerHeight()
-	if height == 0 {
-		// Panic here since this is an indication of invalid situation which should not happen in normal
-		// code path.
-		logger.Panic("Committer height cannot be zero, ledger should include at least one block (genesis).")
-	}
+	// The Fast peer does not store the ledger, so the LedgerHeight is always 0
+
+	//if height == 0 {
+	//	// Panic here since this is an indication of invalid situation which should not happen in normal
+	//	// code path.
+	//	logger.Panic("Committer height cannot be zero, ledger should include at least one block (genesis).")
+	//}
 
 	if err != nil {
 		logger.Error("Could not read ledger info to obtain current ledger height due to: ", errors.WithStack(err))
@@ -526,49 +536,81 @@ func (s *GossipStateProviderImpl) queueNewMessage(msg *proto.GossipMessage) {
 
 func (s *GossipStateProviderImpl) deliverPayloads() {
 	defer s.done.Done()
+	validated := commit.GetValidated()
 
-	for {
-		select {
-		// Wait for notification that next seq has arrived
-		case <-s.payloads.Ready():
-			logger.Debugf("Ready to transfer payloads to the ledger, next sequence number is = [%d]", s.payloads.Next())
-			// Collect all subsequent payloads
-			for payload := s.payloads.Pop(); payload != nil; payload = s.payloads.Pop() {
-				rawBlock := &common.Block{}
-				if err := pb.Unmarshal(payload.Data, rawBlock); err != nil {
-					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
-					continue
-				}
-				if rawBlock.Data == nil || rawBlock.Header == nil {
-					logger.Errorf("Block with claimed sequence %d has no header (%v) or data (%v)",
-						payload.SeqNum, rawBlock.Header, rawBlock.Data)
-					continue
-				}
-				logger.Debug("New block with claimed sequence number ", payload.SeqNum, " transactions num ", len(rawBlock.Data.Data))
+	go s.validate(validated)
 
-				// Read all private data into slice
-				var p util.PvtDataCollections
-				if payload.PrivateData != nil {
-					err := p.Unmarshal(payload.PrivateData)
-					if err != nil {
-						logger.Errorf("Wasn't able to unmarshal private data for block seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
-						continue
-					}
+	backlog := make(map[uint64]uint64, 1024)
+	commitSequence := commit.GetSequence()
+	for nextToCommit := range commitSequence {
+		var blockNo uint64
+		var ok bool
+		if blockNo, ok = backlog[nextToCommit & 1023]; !ok || blockNo != nextToCommit {
+			for bn := range validated{
+				if bn == nextToCommit {
+					blockNo = bn
+					break
 				}
-				if err := s.commitBlock(rawBlock, p); err != nil {
-					if executionErr, isExecutionErr := err.(*vsccErrors.VSCCExecutionFailureError); isExecutionErr {
-						logger.Errorf("Failed executing VSCC due to %v. Aborting chain processing", executionErr)
-						return
-					}
-					logger.Panicf("Cannot commit block to the ledger due to %+v", errors.WithStack(err))
-				}
+				backlog[bn & 1023] = bn
 			}
-		case <-s.stopCh:
-			s.stopCh <- struct{}{}
-			logger.Debug("State provider has been stopped, finishing to push new blocks.")
-			return
 		}
+
+		block, _ := blocks.Cache.Get(blockNo)
+		if err := s.commitBlock(block.Rawblock, util.PvtDataCollections{}); err != nil {
+			if executionErr, isExecutionErr := err.(*vsccErrors.VSCCExecutionFailureError); isExecutionErr {
+				logger.Errorf("Failed executing VSCC due to %v. Aborting chain processing", executionErr)
+				return
+			}
+			logger.Panicf("Cannot commit block to the ledger due to %+v", errors.WithStack(err))
+			}
 	}
+}
+
+func (s *GossipStateProviderImpl) validate(validated chan uint64) {
+	var weight int64
+	if fabric_extension.PipelineWidth/2<1{
+		weight = 1
+	}else{
+		weight = int64(fabric_extension.PipelineWidth/2)
+	}
+	weighted := semaphore.NewWeighted(weight)
+
+	for seqNum := range commit.GetVerified() {
+		weighted.Acquire(context.Background(),1)
+		go s.validateInParallel(seqNum, validated, weighted)
+	}
+	logger.Debug("State provider has been stopped, finishing to push new blocks.")
+	close(validated)
+}
+func (s *GossipStateProviderImpl) validateInParallel(seqNum uint64, validated chan uint64, weighted *semaphore.Weighted) {
+	defer weighted.Release(1)
+	logger.Debugf("Ready to transfer payloads to the ledger, next sequence number is = [%d]", seqNum)
+	// Collect all subsequent payloads
+	block, err := blocks.Cache.Get(seqNum)
+	if err != nil {
+		logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", seqNum, errors.WithStack(err))
+		return
+	}
+	if block.Rawblock.Data == nil || block.Rawblock.Header == nil {
+		logger.Errorf("Block with claimed sequence %d has no header (%v) or data (%v)",
+			seqNum, block.Rawblock.Header, block.Rawblock.Data)
+		return
+	}
+	logger.Debug("New block with claimed sequence number ", seqNum, " transactions num ", len(block.Rawblock.Data.Data))
+	// Read all private data into slice
+	_, err = blocks.GetPvtData(seqNum)
+	if err != nil {
+		logger.Errorf("Wasn't able to unmarshal private data for block seqNum = %d due to (%+v)...dropping block", seqNum, errors.WithStack(err))
+		return
+	}
+
+	logger.Debugf("Validating block [%d]", seqNum)
+
+	if err = s.ledger.ValidateByNo(seqNum); err != nil {
+		logger.Errorf("Wasn't able to validate block seqNum = %d due to (%+v)...dropping block", seqNum, errors.WithStack(err))
+		return
+	}
+	validated <- seqNum
 }
 
 func (s *GossipStateProviderImpl) antiEntropy() {

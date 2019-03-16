@@ -12,8 +12,9 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
+	"github.com/fabric_extension/db"
 	"github.com/golang/protobuf/proto"
-	localconfig "github.com/hyperledger/fabric/orderer/common/localconfig"
+	"github.com/hyperledger/fabric/orderer/common/localconfig"
 	"github.com/hyperledger/fabric/orderer/common/msgprocessor"
 	"github.com/hyperledger/fabric/orderer/consensus"
 	cb "github.com/hyperledger/fabric/protos/common"
@@ -64,6 +65,7 @@ func newChain(
 	}
 
 	return &chainImpl{
+		db: db.New(),
 		consenter:                   consenter,
 		ConsenterSupport:            support,
 		channel:                     newChannel(support.ChainID(), defaultPartition),
@@ -80,6 +82,7 @@ func newChain(
 }
 
 type chainImpl struct {
+	db        *db.DB
 	consenter commonConsenter
 	consensus.ConsenterSupport
 
@@ -180,7 +183,17 @@ func (chain *chainImpl) order(env *cb.Envelope, configSeq uint64, originalOffset
 	if err != nil {
 		return fmt.Errorf("cannot enqueue, unable to marshal envelope because = %s", err)
 	}
-	if !chain.enqueue(newNormalMessage(marshaledEnv, configSeq, originalOffset)) {
+	
+	// Get Channel Header
+	chdr, _ := utils.ChannelHeader(env)
+	logger.Info("Inserting payload:", chdr.ChannelId, chdr.TxId)
+	
+	// key and value
+	key := []byte(chdr.TxId)
+	chain.db.Put(key, marshaledEnv, true)
+	
+	// newNormalMessage
+	if !chain.enqueue(newNormalMessage(key, configSeq, originalOffset)) {
 		return fmt.Errorf("cannot enqueue")
 	}
 	return nil
@@ -643,8 +656,12 @@ func (chain *chainImpl) processRegular(regularMessage *ab.KafkaMessageRegular, r
 
 	seq := chain.Sequence()
 
+    key := regularMessage.Payload
+    logger.Info("Got: ",string(key[:]))
+    Payload, _ := chain.db.Get(key)
+	
 	env := &cb.Envelope{}
-	if err := proto.Unmarshal(regularMessage.Payload, env); err != nil {
+	if err := proto.Unmarshal(Payload, env); err != nil {
 		// This shouldn't happen, it should be filtered at ingress
 		return fmt.Errorf("failed to unmarshal payload of regular message because = %s", err)
 	}

@@ -8,8 +8,9 @@ package txvalidator
 
 import (
 	"fmt"
+	"github.com/fabric_extension/block_cache"
+	"log"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/channelconfig"
 	"github.com/hyperledger/fabric/common/configtx"
 	commonerrors "github.com/hyperledger/fabric/common/errors"
@@ -59,6 +60,10 @@ type Support interface {
 type Validator interface {
 	Validate(block *common.Block) error
 }
+type FastValidator interface{
+	Validator
+	ValidateByNo(blockNo uint64) error
+}
 
 // private interface to decouple tx validator
 // and vscc execution, in order to increase
@@ -67,12 +72,17 @@ type vsccValidator interface {
 	VSCCValidateTx(seq int, payload *common.Payload, envBytes []byte, block *common.Block) (error, peer.TxValidationCode)
 }
 
+type vsccValidatorByNo interface {
+	vsccValidator
+	VSCCValidateTxByNo(tIdx int, blockNo uint64 ) (error, peer.TxValidationCode)
+}
+
 // implementation of Validator interface, keeps
 // reference to the ledger to enable tx simulation
 // and execution of vscc
 type TxValidator struct {
 	Support Support
-	Vscc    vsccValidator
+	Vscc    vsccValidatorByNo
 }
 
 var logger *logging.Logger // package-level logger
@@ -83,8 +93,7 @@ func init() {
 }
 
 type blockValidationRequest struct {
-	block *common.Block
-	d     []byte
+	blockNo uint64
 	tIdx  int
 }
 
@@ -132,42 +141,158 @@ func (v *TxValidator) chainExists(chain string) bool {
 //    guaranteed to be alone in the block. If/when this assumption
 //    is violated, this code must be changed.
 func (v *TxValidator) Validate(block *common.Block) error {
+	//var err error
+	//var errPos int
+	//
+	//logger.Debug("START Block Validation")
+	//defer logger.Debug("END Block Validation")
+	//
+	//
+	//
+	//// Initialize trans as valid here, then set invalidation reason code upon invalidation below
+	//txsfltr := ledgerUtil.NewTxValidationFlags(len(block.Data.Data))
+	//// txsChaincodeNames records all the invoked chaincodes by tx in a block
+	//txsChaincodeNames := make(map[int]*sysccprovider.ChaincodeInstance)
+	//// upgradedChaincodes records all the chaincodes that are upgraded in a block
+	//txsUpgradedChaincodes := make(map[int]*sysccprovider.ChaincodeInstance)
+	//// array of txids
+	//txidArray := make([]string, len(block.Data.Data))
+	//
+	//results := make(chan *blockValidationResult, len(block.Data.Data))
+	//for tIdx, d := range block.Data.Data {
+	//	// ensure that we don't have too many concurrent validation workers
+	//
+	//	v.Support.Acquire(context.Background(), 1)
+	//	tIdx, d := tIdx, d
+	//	go func() {
+	//		defer v.Support.Release(1)
+	//
+	//		v.validateTx(&blockValidationRequest{
+	//			tx:     ,
+	//			block: block,
+	//			tIdx:  tIdx,
+	//		}, results)
+	//	}()
+	//}
+	//
+	//logger.Debugf("expecting %d block validation responses", len(block.Data.Data))
+	//
+	//// now we read responses in the order in which they come back
+	//for i := 0; i < len(block.Data.Data); i++ {
+	//	res := <-results
+	//
+	//	if res.err != nil {
+	//		// if there is an error, we buffer its value, wait for
+	//		// all workers to complete validation and then return
+	//		// the error from the first tx in this block that returned an error
+	//		logger.Debugf("got terminal error %s for idx %d", res.err, res.tIdx)
+	//
+	//		if err == nil || res.tIdx < errPos {
+	//			err = res.err
+	//			errPos = res.tIdx
+	//		}
+	//
+	//		fmt.Printf("Error during validation: %v\n",err)
+	//	} else {
+	//		// if there was no error, we set the txsfltr and we set the
+	//		// txsChaincodeNames and txsUpgradedChaincodes maps
+	//		logger.Debugf("got result for idx %d, code %d", res.tIdx, res.validationCode)
+	//
+	//		txsfltr.SetFlag(res.tIdx, res.validationCode)
+	//
+	//		if res.validationCode == peer.TxValidationCode_VALID {
+	//			if res.txsChaincodeName != nil {
+	//				txsChaincodeNames[res.tIdx] = res.txsChaincodeName
+	//			}
+	//			if res.txsUpgradedChaincode != nil {
+	//				txsUpgradedChaincodes[res.tIdx] = res.txsUpgradedChaincode
+	//			}
+	//			txidArray[res.tIdx] = res.txid
+	//		}
+	//	}
+	//}
+	//
+	//// if we're here, all workers have completed the validation.
+	//// If there was an error we return the error from the first
+	//// tx in this block that returned an error
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//// if we operate with this capability, we mark invalid any transaction that has a txid
+	//// which is equal to that of a previous tx in this block
+	//if v.Support.Capabilities().ForbidDuplicateTXIdInBlock() {
+	//	markTXIdDuplicates(txidArray, txsfltr)
+	//}
+	//
+	//// if we're here, all workers have completed validation and
+	//// no error was reported; we set the tx filter and return
+	//// success
+	//v.invalidTXsForUpgradeCC(txsChaincodeNames, txsUpgradedChaincodes, txsfltr)
+	//
+	//// make sure no transaction has skipped validation
+	//err = v.allValidated(txsfltr, block.Header.Number)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//umb ,_:=blocks.Cache.Get(block.Header.Number)
+	//
+	//if umb== nil{
+	//	fmt.Println(block.Header.Number)
+	//}
+	//// Initialize metadata structure
+	//utils.InitBlockMetadata(umb.Rawblock)
+	//
+	//umb.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsfltr
+
+	return nil
+}
+
+
+
+
+
+
+func (v *TxValidator) ValidateByNo(blockNo uint64) error {
 	var err error
 	var errPos int
 
 	logger.Debug("START Block Validation")
 	defer logger.Debug("END Block Validation")
+
+	block, err := blocks.Cache.Get(blockNo);
+	if err != nil{
+		panic(err)
+	}
+	txCount := len(block.Txs)
+
 	// Initialize trans as valid here, then set invalidation reason code upon invalidation below
-	txsfltr := ledgerUtil.NewTxValidationFlags(len(block.Data.Data))
+	txsfltr := ledgerUtil.NewTxValidationFlags(txCount)
 	// txsChaincodeNames records all the invoked chaincodes by tx in a block
 	txsChaincodeNames := make(map[int]*sysccprovider.ChaincodeInstance)
 	// upgradedChaincodes records all the chaincodes that are upgraded in a block
 	txsUpgradedChaincodes := make(map[int]*sysccprovider.ChaincodeInstance)
 	// array of txids
-	txidArray := make([]string, len(block.Data.Data))
+	txidArray := make([]string, txCount)
 
-	results := make(chan *blockValidationResult)
-	go func() {
-		for tIdx, d := range block.Data.Data {
-			// ensure that we don't have too many concurrent validation workers
-			v.Support.Acquire(context.Background(), 1)
+	results := make(chan *blockValidationResult, txCount)
+	for tIdx := range block.Txs {
+		// ensure that we don't have too many concurrent validation workers
 
-			go func(index int, data []byte) {
-				defer v.Support.Release(1)
+		v.Support.Acquire(context.Background(), 1)
+		tIdx := tIdx
+		go func() {
+			defer v.Support.Release(1)
 
-				v.validateTx(&blockValidationRequest{
-					d:     data,
-					block: block,
-					tIdx:  index,
-				}, results)
-			}(tIdx, d)
-		}
-	}()
+			v.validateTx(blockNo,tIdx, results)
+		}()
+	}
 
-	logger.Debugf("expecting %d block validation responses", len(block.Data.Data))
+	//logger.Debugf("expecting %d block validation responses", len(block.Data.Data))
 
 	// now we read responses in the order in which they come back
-	for i := 0; i < len(block.Data.Data); i++ {
+	for i := 0; i < txCount; i++ {
 		res := <-results
 
 		if res.err != nil {
@@ -180,6 +305,8 @@ func (v *TxValidator) Validate(block *common.Block) error {
 				err = res.err
 				errPos = res.tIdx
 			}
+
+			fmt.Printf("Error during validation: %v\n",err)
 		} else {
 			// if there was no error, we set the txsfltr and we set the
 			// txsChaincodeNames and txsUpgradedChaincodes maps
@@ -218,25 +345,25 @@ func (v *TxValidator) Validate(block *common.Block) error {
 	v.invalidTXsForUpgradeCC(txsChaincodeNames, txsUpgradedChaincodes, txsfltr)
 
 	// make sure no transaction has skipped validation
-	err = v.allValidated(txsfltr, block)
+	err = v.allValidated(txsfltr, blockNo)
 	if err != nil {
 		return err
 	}
 
 	// Initialize metadata structure
-	utils.InitBlockMetadata(block)
+	utils.InitBlockMetadata(block.Rawblock)
 
-	block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsfltr
+	block.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsfltr
 
 	return nil
 }
 
 // allValidated returns error if some of the validation flags have not been set
 // during validation
-func (v *TxValidator) allValidated(txsfltr ledgerUtil.TxValidationFlags, block *common.Block) error {
+func (v *TxValidator) allValidated(txsfltr ledgerUtil.TxValidationFlags, blockNo uint64) error {
 	for id, f := range txsfltr {
 		if peer.TxValidationCode(f) == peer.TxValidationCode_NOT_VALIDATED {
-			return errors.Errorf("transaction %d in block %d has skipped validation", id, block.Header.Number)
+			return errors.Errorf("transaction %d in block %d has skipped validation", id, blockNo)
 		}
 	}
 
@@ -261,194 +388,164 @@ func markTXIdDuplicates(txids []string, txsfltr ledgerUtil.TxValidationFlags) {
 	}
 }
 
-func (v *TxValidator) validateTx(req *blockValidationRequest, results chan<- *blockValidationResult) {
-	block := req.block
-	d := req.d
-	tIdx := req.tIdx
-	txID := ""
+func (v *TxValidator) validateTx(blockNo uint64, tIdx int, results chan<- *blockValidationResult) {
+	block, err:= blocks.Cache.Get(blockNo)
+	if err != nil{
+		log.Fatal(fmt.Sprintf("couldn't find block %d in cache\nCache:%v",blockNo, blocks.Cache ))
+	}
+	tx :=block.Txs[tIdx]
 
-	if d == nil {
+
+	// validate the transaction: here we check that the transaction
+	// is properly formed, properly signed and that the security
+	// chain binding proposal to endorsements to tx holds. We do
+	// NOT check the validity of endorsements, though. That's a
+	// job for VSCC below
+	//logger.Debugf("validateTx starts for block %p env %p txn %d", rawblock, env, tIdx)
+	//defer logger.Debugf("validateTx completes for block %p env %p txn %d", rawblock, env, tIdx)
+	var txResult peer.TxValidationCode
+	var txsChaincodeName *sysccprovider.ChaincodeInstance
+	var txsUpgradedChaincode *sysccprovider.ChaincodeInstance
+
+	if txResult = validation.ValidateTransaction(tIdx,blockNo, v.Support.Capabilities()); txResult != peer.TxValidationCode_VALID {
+		logger.Errorf("Invalid transaction with index %d", tIdx)
 		results <- &blockValidationResult{
-			tIdx: tIdx,
+			tIdx:           tIdx,
+			validationCode: txResult,
 		}
 		return
 	}
 
-	if env, err := utils.GetEnvelopeFromBlock(d); err != nil {
-		logger.Warningf("Error getting tx from block: %+v", err)
+	chdr, err :=tx.GetChannelHeader()
+	if err != nil {
+		logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
 		results <- &blockValidationResult{
 			tIdx:           tIdx,
 			validationCode: peer.TxValidationCode_INVALID_OTHER_REASON,
 		}
 		return
-	} else if env != nil {
-		// validate the transaction: here we check that the transaction
-		// is properly formed, properly signed and that the security
-		// chain binding proposal to endorsements to tx holds. We do
-		// NOT check the validity of endorsements, though. That's a
-		// job for VSCC below
-		logger.Debugf("validateTx starts for block %p env %p txn %d", block, env, tIdx)
-		defer logger.Debugf("validateTx completes for block %p env %p txn %d", block, env, tIdx)
-		var payload *common.Payload
-		var err error
-		var txResult peer.TxValidationCode
-		var txsChaincodeName *sysccprovider.ChaincodeInstance
-		var txsUpgradedChaincode *sysccprovider.ChaincodeInstance
+	}
 
-		if payload, txResult = validation.ValidateTransaction(env, v.Support.Capabilities()); txResult != peer.TxValidationCode_VALID {
-			logger.Errorf("Invalid transaction with index %d", tIdx)
+	channel := chdr.ChannelId
+	logger.Debugf("Transaction is for channel %s", channel)
+
+	if !v.chainExists(channel) {
+		logger.Errorf("Dropping transaction for non-existent channel %s", channel)
+		results <- &blockValidationResult{
+			tIdx:           tIdx,
+			validationCode: peer.TxValidationCode_TARGET_CHAIN_NOT_FOUND,
+		}
+		return
+	}
+
+	txID:= ""
+	if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
+		// Check duplicate transactions
+		txID = chdr.TxId
+		// GetTransactionByID will return:
+		_, err := v.Support.Ledger().GetTransactionByID(txID)
+		// 1) err == nil => there is already a tx in the ledger with the supplied id
+		if err == nil {
+			logger.Error("Duplicate transaction found, ", txID, ", skipping")
 			results <- &blockValidationResult{
 				tIdx:           tIdx,
-				validationCode: txResult,
+				validationCode: peer.TxValidationCode_DUPLICATE_TXID,
 			}
 			return
 		}
+		// 2) err is not of type blkstorage.NotFoundInIndexErr => we could not verify whether a tx with the supplied id is in the ledger
+		if _, isNotFoundInIndexErrType := err.(ledger.NotFoundInIndexErr); !isNotFoundInIndexErrType {
+			logger.Errorf("Ledger failure while attempting to detect duplicate status for txid %s, err '%s'. Aborting", txID, err)
+			results <- &blockValidationResult{
+				tIdx: tIdx,
+				err:  err,
+			}
+			return
+		}
+		// 3) err is of type blkstorage.NotFoundInIndexErr => there is no tx with the supplied id in the ledger
 
-		chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+		// Validate tx with vscc and policy
+		logger.Debug("Validating transaction vscc tx validate")
+		err, cde := v.Vscc.VSCCValidateTxByNo(tIdx, blockNo)
 		if err != nil {
-			logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
+			logger.Errorf("VSCCValidateTx for transaction txId = %s returned error: %s", txID, err)
+			switch err.(type) {
+			case *commonerrors.VSCCExecutionFailureError:
+				results <- &blockValidationResult{
+					tIdx: tIdx,
+					err:  err,
+				}
+				return
+			case *commonerrors.VSCCInfoLookupFailureError:
+				results <- &blockValidationResult{
+					tIdx: tIdx,
+					err:  err,
+				}
+				return
+			default:
+				results <- &blockValidationResult{
+					tIdx:           tIdx,
+					validationCode: cde,
+				}
+				return
+			}
+		}
+
+		txsChaincodeName, txsUpgradedChaincode, err = v.getTxCCInstance(tIdx, blockNo)
+		if err != nil {
+			logger.Errorf("Get chaincode instance from transaction txId = %s returned error: %+v", txID, err)
 			results <- &blockValidationResult{
 				tIdx:           tIdx,
 				validationCode: peer.TxValidationCode_INVALID_OTHER_REASON,
 			}
 			return
 		}
-
-		channel := chdr.ChannelId
-		logger.Debugf("Transaction is for channel %s", channel)
-
-		if !v.chainExists(channel) {
-			logger.Errorf("Dropping transaction for non-existent channel %s", channel)
+		if txsUpgradedChaincode != nil {
+			logger.Infof("Find chaincode upgrade transaction for chaincode %s on channel %s with new version %s", txsUpgradedChaincode.ChaincodeName, txsUpgradedChaincode.ChainID, txsUpgradedChaincode.ChaincodeVersion)
+		}
+	} else if common.HeaderType(chdr.Type) == common.HeaderType_CONFIG {
+		block,_ :=blocks.Cache.Get(blockNo)
+		payload,_ :=block.Txs[tIdx].GetPayload()
+		configEnvelope, err := configtx.UnmarshalConfigEnvelope(payload.Data)
+		if err != nil {
+			err = errors.WithMessage(err, "error unmarshalling config which passed initial validity checks")
+			logger.Criticalf("%+v", err)
 			results <- &blockValidationResult{
-				tIdx:           tIdx,
-				validationCode: peer.TxValidationCode_TARGET_CHAIN_NOT_FOUND,
+				tIdx: tIdx,
+				err:  err,
 			}
 			return
 		}
 
-		if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
-			// Check duplicate transactions
-			txID = chdr.TxId
-			// GetTransactionByID will return:
-			_, err := v.Support.Ledger().GetTransactionByID(txID)
-			// 1) err == nil => there is already a tx in the ledger with the supplied id
-			if err == nil {
-				logger.Error("Duplicate transaction found, ", txID, ", skipping")
-				results <- &blockValidationResult{
-					tIdx:           tIdx,
-					validationCode: peer.TxValidationCode_DUPLICATE_TXID,
-				}
-				return
-			}
-			// 2) err is not of type blkstorage.NotFoundInIndexErr => we could not verify whether a tx with the supplied id is in the ledger
-			if _, isNotFoundInIndexErrType := err.(ledger.NotFoundInIndexErr); !isNotFoundInIndexErrType {
-				logger.Errorf("Ledger failure while attempting to detect duplicate status for txid %s, err '%s'. Aborting", txID, err)
-				results <- &blockValidationResult{
-					tIdx: tIdx,
-					err:  err,
-				}
-				return
-			}
-			// 3) err is of type blkstorage.NotFoundInIndexErr => there is no tx with the supplied id in the ledger
-
-			// Validate tx with vscc and policy
-			logger.Debug("Validating transaction vscc tx validate")
-			err, cde := v.Vscc.VSCCValidateTx(tIdx, payload, d, block)
-			if err != nil {
-				logger.Errorf("VSCCValidateTx for transaction txId = %s returned error: %s", txID, err)
-				switch err.(type) {
-				case *commonerrors.VSCCExecutionFailureError:
-					results <- &blockValidationResult{
-						tIdx: tIdx,
-						err:  err,
-					}
-					return
-				case *commonerrors.VSCCInfoLookupFailureError:
-					results <- &blockValidationResult{
-						tIdx: tIdx,
-						err:  err,
-					}
-					return
-				default:
-					results <- &blockValidationResult{
-						tIdx:           tIdx,
-						validationCode: cde,
-					}
-					return
-				}
-			}
-
-			invokeCC, upgradeCC, err := v.getTxCCInstance(payload)
-			if err != nil {
-				logger.Errorf("Get chaincode instance from transaction txId = %s returned error: %+v", txID, err)
-				results <- &blockValidationResult{
-					tIdx:           tIdx,
-					validationCode: peer.TxValidationCode_INVALID_OTHER_REASON,
-				}
-				return
-			}
-			txsChaincodeName = invokeCC
-			if upgradeCC != nil {
-				logger.Infof("Find chaincode upgrade transaction for chaincode %s on channel %s with new version %s", upgradeCC.ChaincodeName, upgradeCC.ChainID, upgradeCC.ChaincodeVersion)
-				txsUpgradedChaincode = upgradeCC
-			}
-		} else if common.HeaderType(chdr.Type) == common.HeaderType_CONFIG {
-			configEnvelope, err := configtx.UnmarshalConfigEnvelope(payload.Data)
-			if err != nil {
-				err = errors.WithMessage(err, "error unmarshalling config which passed initial validity checks")
-				logger.Criticalf("%+v", err)
-				results <- &blockValidationResult{
-					tIdx: tIdx,
-					err:  err,
-				}
-				return
-			}
-
-			if err := v.Support.Apply(configEnvelope); err != nil {
-				err = errors.WithMessage(err, "error validating config which passed initial validity checks")
-				logger.Criticalf("%+v", err)
-				results <- &blockValidationResult{
-					tIdx: tIdx,
-					err:  err,
-				}
-				return
-			}
-			logger.Debugf("config transaction received for chain %s", channel)
-		} else {
-			logger.Warningf("Unknown transaction type [%s] in block number [%d] transaction index [%d]",
-				common.HeaderType(chdr.Type), block.Header.Number, tIdx)
+		if err := v.Support.Apply(configEnvelope); err != nil {
+			err = errors.WithMessage(err, "error validating config which passed initial validity checks")
+			logger.Criticalf("%+v", err)
 			results <- &blockValidationResult{
-				tIdx:           tIdx,
-				validationCode: peer.TxValidationCode_UNKNOWN_TX_TYPE,
+				tIdx: tIdx,
+				err:  err,
 			}
 			return
 		}
-
-		if _, err := proto.Marshal(env); err != nil {
-			logger.Warningf("Cannot marshal transaction: %s", err)
-			results <- &blockValidationResult{
-				tIdx:           tIdx,
-				validationCode: peer.TxValidationCode_MARSHAL_TX_ERROR,
-			}
-			return
-		}
-		// Succeeded to pass down here, transaction is valid
-		results <- &blockValidationResult{
-			tIdx:                 tIdx,
-			txsChaincodeName:     txsChaincodeName,
-			txsUpgradedChaincode: txsUpgradedChaincode,
-			validationCode:       peer.TxValidationCode_VALID,
-			txid:                 txID,
-		}
-		return
+		logger.Debugf("config transaction received for chain %s", channel)
 	} else {
-		logger.Warning("Nil tx from block")
+		logger.Warningf("Unknown transaction type [%s] in block number [%d] transaction index [%d]",
+			common.HeaderType(chdr.Type), blockNo, tIdx)
 		results <- &blockValidationResult{
 			tIdx:           tIdx,
-			validationCode: peer.TxValidationCode_NIL_ENVELOPE,
+			validationCode: peer.TxValidationCode_UNKNOWN_TX_TYPE,
 		}
 		return
 	}
+
+	// Succeeded to pass down here, transaction is valid
+	results <- &blockValidationResult{
+		tIdx:                 tIdx,
+		txsChaincodeName:     txsChaincodeName,
+		txsUpgradedChaincode: txsUpgradedChaincode,
+		validationCode:       peer.TxValidationCode_VALID,
+		txid:                 txID,
+	}
+	return
 }
 
 // generateCCKey generates a unique identifier for chaincode in specific channel
@@ -502,9 +599,12 @@ func (v *TxValidator) invalidTXsForUpgradeCC(txsChaincodeNames map[int]*sysccpro
 	}
 }
 
-func (v *TxValidator) getTxCCInstance(payload *common.Payload) (invokeCCIns, upgradeCCIns *sysccprovider.ChaincodeInstance, err error) {
+func (v *TxValidator) getTxCCInstance(tIdx int, blockNo uint64) (invokeCCIns, upgradeCCIns *sysccprovider.ChaincodeInstance, err error) {
+	block,_:= blocks.Cache.Get(blockNo)
+
 	// This is duplicated unpacking work, but make test easier.
-	chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+	unmarshaledTx := block.Txs[tIdx]
+	chdr, err := unmarshaledTx.GetChannelHeader()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -513,7 +613,7 @@ func (v *TxValidator) getTxCCInstance(payload *common.Payload) (invokeCCIns, upg
 	chainID := chdr.ChannelId // it is guaranteed to be an existing channel by now
 
 	// ChaincodeID
-	hdrExt, err := utils.GetChaincodeHeaderExtension(payload.Header)
+	hdrExt, err := unmarshaledTx.GetExtension()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -521,29 +621,29 @@ func (v *TxValidator) getTxCCInstance(payload *common.Payload) (invokeCCIns, upg
 	invokeIns := &sysccprovider.ChaincodeInstance{ChainID: chainID, ChaincodeName: invokeCC.Name, ChaincodeVersion: invokeCC.Version}
 
 	// Transaction
-	tx, err := utils.GetTransaction(payload.Data)
+	_, err = unmarshaledTx.GetPeerTransaction()
 	if err != nil {
 		logger.Errorf("GetTransaction failed: %+v", err)
 		return invokeIns, nil, nil
 	}
 
 	// ChaincodeActionPayload
-	cap, err := utils.GetChaincodeActionPayload(tx.Actions[0].Payload)
+	action := unmarshaledTx.GetActions()[0]
+	_,_, err = action.GetActionPayload()
 	if err != nil {
 		logger.Errorf("GetChaincodeActionPayload failed: %+v", err)
 		return invokeIns, nil, nil
 	}
 
 	// ChaincodeProposalPayload
-	cpp, err := utils.GetChaincodeProposalPayload(cap.ChaincodeProposalPayload)
+	_, err = action.GetProposalPayload()
 	if err != nil {
 		logger.Errorf("GetChaincodeProposalPayload failed: %+v", err)
 		return invokeIns, nil, nil
 	}
 
 	// ChaincodeInvocationSpec
-	cis := &peer.ChaincodeInvocationSpec{}
-	err = proto.Unmarshal(cpp.Input, cis)
+	cis,err :=action.GetInvokeSpec()
 	if err != nil {
 		logger.Errorf("GetChaincodeInvokeSpec failed: %+v", err)
 		return invokeIns, nil, nil
@@ -551,28 +651,22 @@ func (v *TxValidator) getTxCCInstance(payload *common.Payload) (invokeCCIns, upg
 
 	if invokeCC.Name == "lscc" {
 		if string(cis.ChaincodeSpec.Input.Args[0]) == "upgrade" {
-			upgradeIns, err := v.getUpgradeTxInstance(chainID, cis.ChaincodeSpec.Input.Args[2])
+			cds, err := action.GetDeploymentSpec()
 			if err != nil {
-				return invokeIns, nil, nil
+				return invokeIns, nil, err
 			}
+
+			upgradeIns := &sysccprovider.ChaincodeInstance{
+				ChainID:          chainID,
+				ChaincodeName:    cds.ChaincodeSpec.ChaincodeId.Name,
+				ChaincodeVersion: cds.ChaincodeSpec.ChaincodeId.Version,
+			}
+
 			return invokeIns, upgradeIns, nil
 		}
 	}
 
 	return invokeIns, nil, nil
-}
-
-func (v *TxValidator) getUpgradeTxInstance(chainID string, cdsBytes []byte) (*sysccprovider.ChaincodeInstance, error) {
-	cds, err := utils.GetChaincodeDeploymentSpec(cdsBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	return &sysccprovider.ChaincodeInstance{
-		ChainID:          chainID,
-		ChaincodeName:    cds.ChaincodeSpec.ChaincodeId.Name,
-		ChaincodeVersion: cds.ChaincodeSpec.ChaincodeId.Version,
-	}, nil
 }
 
 type dynamicDeserializer struct {

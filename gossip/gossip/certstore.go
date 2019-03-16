@@ -8,6 +8,8 @@ package gossip
 
 import (
 	"bytes"
+	"context"
+	"github.com/fabric_extension/grpcmocks"
 
 	"github.com/hyperledger/fabric/gossip/api"
 	"github.com/hyperledger/fabric/gossip/common"
@@ -96,7 +98,9 @@ func (cs *certStore) validateIdentityMsg(msg *proto.SignedGossipMessage) error {
 	}
 
 	verifier := func(peerIdentity []byte, signature, message []byte) error {
-		return cs.mcs.Verify(api.PeerIdentityType(peerIdentity), signature, message)
+		_,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data: message, Signature:signature, Creator:peerIdentity})
+
+		return err
 	}
 
 	err := msg.Verify(cert, verifier)

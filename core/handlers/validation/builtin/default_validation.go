@@ -23,17 +23,22 @@ import (
 type DefaultValidationFactory struct {
 }
 
-func (*DefaultValidationFactory) New() validation.Plugin {
+func (*DefaultValidationFactory) New() validation.FastPlugin {
 	return &DefaultValidation{}
 }
 
 type DefaultValidation struct {
-	TxValidator TransactionValidator
+	TxValidator FastTransactionValidator
 }
 
 //go:generate mockery -dir . -name TransactionValidator -case underscore -output mocks/
 type TransactionValidator interface {
 	Validate(txData []byte, policy []byte) commonerrors.TxValidationError
+}
+
+type FastTransactionValidator interface {
+	TransactionValidator
+	ValidateByNo(blockNo uint64, tIdx int, policy []byte) commonerrors.TxValidationError
 }
 
 func (v *DefaultValidation) Validate(block *common.Block, namespace string, txPosition int, actionPosition int, contextData ...validation.ContextDatum) error {
@@ -56,6 +61,21 @@ func (v *DefaultValidation) Validate(block *common.Block, namespace string, txPo
 	}
 	err := v.TxValidator.Validate(block.Data.Data[txPosition], serializedPolicy.Bytes())
 	logger.Debugf("block %d, namespace: %s, tx %d validation results is: %v", block.Header.Number, namespace, txPosition, err)
+	return convertErrorTypeOrPanic(err)
+}
+
+func (v *DefaultValidation) ValidateByNo(blockNo uint64, namespace string, txPosition int, actionPosition int, contextData ...validation.ContextDatum) error {
+	if len(contextData) == 0 {
+		logger.Panicf("Expected to receive policy bytes in context data")
+	}
+
+	serializedPolicy, isSerializedPolicy := contextData[0].(SerializedPolicy)
+	if !isSerializedPolicy {
+		logger.Panicf("Expected to receive a serialized policy in the first context data")
+	}
+
+	err := v.TxValidator.ValidateByNo(blockNo, txPosition, serializedPolicy.Bytes())
+	logger.Debugf("block %d, namespace: %s, tx %d validation results is: %v", blockNo, namespace, txPosition, err)
 	return convertErrorTypeOrPanic(err)
 }
 

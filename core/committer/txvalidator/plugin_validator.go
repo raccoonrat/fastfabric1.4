@@ -58,6 +58,7 @@ type Context struct {
 	Policy    []byte
 	Namespace string
 	Block     *common.Block
+	BlockNo   uint64
 }
 
 // String returns a string representation of this Context
@@ -96,7 +97,11 @@ func (pv *PluginValidator) ValidateWithPlugin(ctx *Context) error {
 			Reason: fmt.Sprintf("plugin with name %s couldn't be used: %v", ctx.VSCCName, err),
 		}
 	}
-	err = plugin.Validate(ctx.Block, ctx.Namespace, ctx.Seq, 0, SerializedPolicy(ctx.Policy))
+	if ctx.Block != nil {
+		err = plugin.Validate(ctx.Block, ctx.Namespace, ctx.Seq, 0, SerializedPolicy(ctx.Policy))
+	}else{
+		err = plugin.ValidateByNo(ctx.BlockNo, ctx.Namespace, ctx.Seq, 0, SerializedPolicy(ctx.Policy))
+	}
 	validityStatus := "valid"
 	if err != nil {
 		validityStatus = fmt.Sprintf("invalid: %v", err)
@@ -105,7 +110,7 @@ func (pv *PluginValidator) ValidateWithPlugin(ctx *Context) error {
 	return err
 }
 
-func (pv *PluginValidator) getOrCreatePlugin(ctx *Context) (validation.Plugin, error) {
+func (pv *PluginValidator) getOrCreatePlugin(ctx *Context) (validation.FastPlugin, error) {
 	pluginFactory := pv.PluginFactoryByName(PluginName(ctx.VSCCName))
 	if pluginFactory == nil {
 		return nil, errors.Errorf("plugin with name %s wasn't found", ctx.VSCCName)
@@ -123,7 +128,7 @@ func (pv *PluginValidator) getOrCreatePluginChannelMapping(plugin PluginName, pf
 	if !exists {
 		endorserChannelMapping = &pluginsByChannel{
 			pluginFactory:    pf,
-			channels2Plugins: make(map[string]validation.Plugin),
+			channels2Plugins: make(map[string]validation.FastPlugin),
 			pv:               pv,
 		}
 		pv.pluginChannelMapping[PluginName(plugin)] = endorserChannelMapping
@@ -137,11 +142,11 @@ type PluginName string
 type pluginsByChannel struct {
 	sync.RWMutex
 	pluginFactory    validation.PluginFactory
-	channels2Plugins map[string]validation.Plugin
+	channels2Plugins map[string]validation.FastPlugin
 	pv               *PluginValidator
 }
 
-func (pbc *pluginsByChannel) createPluginIfAbsent(channel string) (validation.Plugin, error) {
+func (pbc *pluginsByChannel) createPluginIfAbsent(channel string) (validation.FastPlugin, error) {
 	pbc.RLock()
 	plugin, exists := pbc.channels2Plugins[channel]
 	pbc.RUnlock()
@@ -165,7 +170,7 @@ func (pbc *pluginsByChannel) createPluginIfAbsent(channel string) (validation.Pl
 	return plugin, nil
 }
 
-func (pbc *pluginsByChannel) initPlugin(plugin validation.Plugin, channel string) (validation.Plugin, error) {
+func (pbc *pluginsByChannel) initPlugin(plugin validation.FastPlugin, channel string) (validation.FastPlugin, error) {
 	pe := &PolicyEvaluator{IdentityDeserializer: pbc.pv.IdentityDeserializer}
 	sf := &StateFetcherImpl{QueryExecutorCreator: pbc.pv}
 	if err := plugin.Init(pe, sf, pbc.pv.capabilities); err != nil {

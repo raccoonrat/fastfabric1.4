@@ -7,6 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package example
 
 import (
+	"context"
+	"github.com/fabric_extension/block_cache"
+	"github.com/fabric_extension/grpcmocks"
 	"github.com/hyperledger/fabric/core/ledger"
 
 	"github.com/hyperledger/fabric/protos/common"
@@ -23,10 +26,12 @@ func ConstructCommitter(ledger ledger.PeerLedger) *Committer {
 }
 
 // Commit commits the block
-func (c *Committer) Commit(rawBlock *common.Block) error {
-	logger.Debugf("Committer validating the block...")
-	if err := c.ledger.CommitWithPvtData(&ledger.BlockAndPvtData{Block: rawBlock}); err != nil {
+func (c *Committer) Commit(blockNo uint64) error {
+	err := c.ledger.CommitWithPvtDataByNo(blockNo)
+	if err != nil {
 		return err
 	}
+
+	go grpcmocks.StClient.Store(context.Background(), func()*common.Block{b,_:=blocks.Cache.Get(blockNo); return b.Rawblock}())
 	return nil
 }

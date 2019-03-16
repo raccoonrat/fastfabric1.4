@@ -8,13 +8,12 @@ package stateleveldb
 import (
 	"bytes"
 	"errors"
-
+	"github.com/fabric_extension/db"
 	"github.com/hyperledger/fabric/common/flogging"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 var logger = flogging.MustGetLogger("stateleveldb")
@@ -25,14 +24,14 @@ var savePointKey = []byte{0x00}
 
 // VersionedDBProvider implements interface VersionedDBProvider
 type VersionedDBProvider struct {
-	dbProvider *leveldbhelper.Provider
+	dbProvider *dbhelper.Provider
 }
 
 // NewVersionedDBProvider instantiates VersionedDBProvider
 func NewVersionedDBProvider() *VersionedDBProvider {
 	dbPath := ledgerconfig.GetStateLevelDBPath()
 	logger.Debugf("constructing VersionedDBProvider dbPath=%s", dbPath)
-	dbProvider := leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: dbPath})
+	dbProvider := dbhelper.NewProvider()
 	return &VersionedDBProvider{dbProvider}
 }
 
@@ -48,12 +47,12 @@ func (provider *VersionedDBProvider) Close() {
 
 // VersionedDB implements VersionedDB interface
 type versionedDB struct {
-	db     *leveldbhelper.DBHandle
+	db     *dbhelper.DBHandle
 	dbName string
 }
 
 // newVersionedDB constructs an instance of VersionedDB
-func newVersionedDB(db *leveldbhelper.DBHandle, dbName string) *versionedDB {
+func newVersionedDB(db *dbhelper.DBHandle, dbName string) *versionedDB {
 	return &versionedDB{db, dbName}
 }
 
@@ -65,7 +64,7 @@ func (vdb *versionedDB) Open() error {
 
 // Close implements method in VersionedDB interface
 func (vdb *versionedDB) Close() {
-	// do nothing because shared db is used
+	vdb.db.Close()
 }
 
 // ValidateKeyValue implements method in VersionedDB interface
@@ -138,7 +137,7 @@ func (vdb *versionedDB) ExecuteQuery(namespace, query string) (statedb.ResultsIt
 
 // ApplyUpdates implements method in VersionedDB interface
 func (vdb *versionedDB) ApplyUpdates(batch *statedb.UpdateBatch, height *version.Height) error {
-	dbBatch := leveldbhelper.NewUpdateBatch()
+	dbBatch := dbhelper.NewUpdateBatch()
 	namespaces := batch.GetUpdatedNamespaces()
 	for _, ns := range namespaces {
 		updates := batch.GetUpdates(ns)
@@ -185,10 +184,10 @@ func splitCompositeKey(compositeKey []byte) (string, string) {
 
 type kvScanner struct {
 	namespace string
-	dbItr     iterator.Iterator
+	dbItr     db.Iterator
 }
 
-func newKVScanner(namespace string, dbItr iterator.Iterator) *kvScanner {
+func newKVScanner(namespace string, dbItr db.Iterator) *kvScanner {
 	return &kvScanner{namespace, dbItr}
 }
 

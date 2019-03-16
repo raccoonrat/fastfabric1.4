@@ -29,6 +29,7 @@ type MessageCryptoService interface {
 	// sequence number that the block's header contains.
 	// else returns error
 	VerifyBlock(chainID common.ChainID, seqNum uint64, signedBlock []byte) error
+	VerifyBlockByNo(chainID common.ChainID, seqNum uint64) error
 
 	// Sign signs msg with this peer's signing key and outputs
 	// the signature if no error occurred.

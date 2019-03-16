@@ -7,6 +7,12 @@ SPDX-License-Identifier: Apache-2.0
 package blocksprovider
 
 import (
+	"context"
+	"fmt"
+	"github.com/fabric_extension"
+	"github.com/fabric_extension/block_cache"
+	"github.com/fabric_extension/commit"
+	"golang.org/x/sync/semaphore"
 	"math"
 	"sync/atomic"
 	"time"
@@ -127,12 +133,18 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 	errorStatusCounter := 0
 	statusCounter := 0
 	defer b.client.Close()
-	for !b.isDone() {
-		msg, err := b.client.Recv()
-		if err != nil {
-			logger.Warningf("[%s] Receive error: %s", b.chainID, err.Error())
-			return
-		}
+	messages := make(chan *orderer.DeliverResponse,fabric_extension.PipelineWidth)
+	go b.receive(messages)
+
+	var weight int64
+	if fabric_extension.PipelineWidth/2<1{
+		weight = 1
+	}else{
+		weight = int64(fabric_extension.PipelineWidth/2)
+	}
+	weighted := semaphore.NewWeighted(weight)
+
+	for msg := range messages {
 		switch t := msg.Type.(type) {
 		case *orderer.DeliverResponse_Status:
 			if t.Status == common.Status_SUCCESS {
@@ -166,38 +178,61 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 			errorStatusCounter = 0
 			statusCounter = 0
 			seqNum := t.Block.Header.Number
+			blocks.Cache.Put(t.Block)
+			commit.GetSequence() <-seqNum
 
-			marshaledBlock, err := proto.Marshal(t.Block)
-			if err != nil {
-				logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID, seqNum, err)
-				continue
-			}
-			if err := b.mcs.VerifyBlock(gossipcommon.ChainID(b.chainID), seqNum, marshaledBlock); err != nil {
-				logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, seqNum, err)
-				continue
-			}
+			weighted.Acquire(context.Background(), 1)
+			go func(w *semaphore.Weighted) {
+				defer w.Release(1)
 
-			numberOfPeers := len(b.gossip.PeersOfChannel(gossipcommon.ChainID(b.chainID)))
-			// Create payload with a block received
-			payload := createPayload(seqNum, marshaledBlock)
-			// Use payload to create gossip message
-			gossipMsg := createGossipMsg(b.chainID, payload)
+				if err := b.mcs.VerifyBlockByNo(gossipcommon.ChainID(b.chainID), seqNum); err != nil {
+					logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, seqNum, err)
+					return
+				}
+				commit.GetVerified() <- seqNum
 
-			logger.Debugf("[%s] Adding payload locally, buffer seqNum = [%d], peers number [%d]", b.chainID, seqNum, numberOfPeers)
-			// Add payload to local state payloads buffer
-			if err := b.gossip.AddPayload(b.chainID, payload); err != nil {
-				logger.Warning("Failed adding payload of", seqNum, "because:", err)
-			}
+				go b.gossipBlock(t.Block)
+			}(weighted)
 
-			// Gossip messages with other nodes
-			logger.Debugf("[%s] Gossiping block [%d], peers number [%d]", b.chainID, seqNum, numberOfPeers)
-			if !b.isDone() {
-				b.gossip.Gossip(gossipMsg)
-			}
 		default:
 			logger.Warningf("[%s] Received unknown: ", b.chainID, t)
 			return
 		}
+	}
+	close(commit.GetVerified())
+	close(commit.GetSequence())
+}
+func (b *blocksProviderImpl) gossipBlock(block *common.Block) {
+
+	marshaledBlock, err := proto.Marshal(block)
+	seqNum := block.Header.Number
+	if err != nil {
+		logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID, seqNum, err)
+		return
+	}
+	numberOfPeers := len(b.gossip.PeersOfChannel(gossipcommon.ChainID(b.chainID)))
+	// Create payload with a block received
+	payload := createPayload(seqNum, marshaledBlock)
+	// Use payload to create gossip message
+	gossipMsg := createGossipMsg(b.chainID, payload)
+
+	// Gossip messages with other nodes
+	logger.Debugf("[%s] Gossiping block [%d], peers number [%d]", b.chainID, seqNum, numberOfPeers)
+	if !b.isDone() {
+		b.gossip.Gossip(gossipMsg)
+	}
+}
+
+func (b *blocksProviderImpl) receive(messages chan *orderer.DeliverResponse) {
+	defer close(messages)
+	for !b.isDone() {
+		msg, err := b.client.Recv()
+		fmt.Println("Block received")
+		if err != nil {
+			logger.Warningf("[%s] Receive error: %s", b.chainID, err.Error())
+			return
+		}
+		messages <- msg
 	}
 }
 

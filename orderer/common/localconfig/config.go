@@ -156,9 +156,9 @@ type Debug struct {
 // Defaults carries the default orderer configuration values.
 var Defaults = TopLevel{
 	General: General{
-		LedgerType:     "file",
+		LedgerType:     "ram",
 		ListenAddress:  "127.0.0.1",
-		ListenPort:     7050,
+		ListenPort:     7051,
 		GenesisMethod:  "provisional",
 		GenesisProfile: "SampleSingleMSPSolo",
 		SystemChannel:  "test-system-channel-name",

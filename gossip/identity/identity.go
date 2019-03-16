@@ -8,6 +8,9 @@ package identity
 
 import (
 	"bytes"
+	"context"
+	"github.com/fabric_extension/grpcmocks"
+
 	"sync"
 	"sync/atomic"
 	"time"
@@ -173,11 +176,9 @@ func (is *identityMapperImpl) Stop() {
 
 // Verify verifies a signed message
 func (is *identityMapperImpl) Verify(vkID, signature, message []byte) error {
-	cert, err := is.Get(vkID)
-	if err != nil {
-		return err
-	}
-	return is.mcs.Verify(cert, signature, message)
+	_,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:message, Signature:signature, Creator:vkID})
+
+	return err
 }
 
 // GetPKIidOfCert returns the PKI-ID of a certificate

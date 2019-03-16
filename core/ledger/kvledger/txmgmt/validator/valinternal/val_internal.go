@@ -19,6 +19,11 @@ type InternalValidator interface {
 	ValidateAndPrepareBatch(block *Block, doMVCCValidation bool) (*PubAndHashUpdates, error)
 }
 
+type FastInternalValidator interface{
+	InternalValidator
+	ValidateAndPrepareBatchByNo(blockNo uint64, doMVCCValidation bool) (*PubAndHashUpdates, error)
+}
+
 // Block is used to used to hold the information from its proto format to a structure
 // that is more suitable/friendly for validation
 type Block struct {

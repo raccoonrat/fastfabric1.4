@@ -18,7 +18,7 @@ package historyleveldb
 
 import (
 	"errors"
-
+	"github.com/fabric_extension/db"
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/common/ledger/util"
@@ -28,7 +28,6 @@ import (
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/queryresult"
 	putils "github.com/hyperledger/fabric/protos/utils"
-	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 // LevelHistoryDBQueryExecutor is a query executor against the LevelDB history DB
@@ -59,12 +58,12 @@ type historyScanner struct {
 	compositePartialKey []byte //compositePartialKey includes namespace~key
 	namespace           string
 	key                 string
-	dbItr               iterator.Iterator
+	dbItr               db.Iterator
 	blockStore          blkstorage.BlockStore
 }
 
 func newHistoryScanner(compositePartialKey []byte, namespace string, key string,
-	dbItr iterator.Iterator, blockStore blkstorage.BlockStore) *historyScanner {
+	dbItr db.Iterator, blockStore blkstorage.BlockStore) *historyScanner {
 	return &historyScanner{compositePartialKey, namespace, key, dbItr, blockStore}
 }
 

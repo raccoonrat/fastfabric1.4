@@ -26,6 +26,11 @@ type Validator interface {
 	ValidateAndPrepareBatch(blockAndPvtdata *ledger.BlockAndPvtData, doMVCCValidation bool) (*privacyenabledstate.UpdateBatch, error)
 }
 
+type FastValidator interface{
+	Validator
+	ValidateAndPrepareBatchByNo(blockNo uint64, doMVCCValidation bool) (*privacyenabledstate.UpdateBatch, error)
+}
+
 // ErrPvtdataHashMissmatch is to be thrown if the hash of a collection present in the public read-write set
 // does not match with the corresponding pvt data  supplied with the block for validation
 type ErrPvtdataHashMissmatch struct {

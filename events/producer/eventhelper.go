@@ -8,6 +8,7 @@ package producer
 
 import (
 	"fmt"
+	"github.com/fabric_extension/block_cache"
 
 	"github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/protos/common"
@@ -28,14 +29,16 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 	blockForEvent.Data = &common.BlockData{}
 	txsFltr := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 
-	for txIndex, d := range block.Data.Data {
-		ebytes := d
-		if ebytes != nil {
-			if env, err := utils.GetEnvelopeFromBlock(ebytes); err != nil {
+	b,_ := blocks.Cache.Get(block.Header.Number)
+
+	for txIndex, d := range b.Txs {
+		var result []byte
+		if d != nil {
+			if env, err := d.GetEnv(); err != nil {
 				logger.Errorf("error getting tx from block: %s", err)
 			} else if env != nil {
 				// get the payload from the envelope
-				payload, err := utils.GetPayload(env)
+				payload, err := d.GetPayload()
 				if err != nil {
 					return nil, nil, "", fmt.Errorf("could not extract payload from envelope: %s", err)
 				}
@@ -46,7 +49,7 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 					continue
 				}
 
-				chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+				chdr, err := d.GetChannelHeader()
 				if err != nil {
 					return nil, nil, "", err
 				}
@@ -56,15 +59,15 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 
 				if headerType == common.HeaderType_ENDORSER_TRANSACTION {
 					logger.Debugf("Channel [%s]: Block event for block number [%d] contains transaction id: %s", channelID, block.Header.Number, chdr.TxId)
-					tx, err := utils.GetTransaction(payload.Data)
+					tx, err := d.GetPeerTransaction()
 					if err != nil {
 						return nil, nil, "", fmt.Errorf("error unmarshalling transaction payload for block event: %s", err)
 					}
 
 					filteredTx := &pb.FilteredTransaction{Txid: chdr.TxId, TxValidationCode: txsFltr.Flag(txIndex), Type: headerType}
 					transactionActions := &pb.FilteredTransactionActions{}
-					for _, action := range tx.Actions {
-						chaincodeActionPayload, err := utils.GetChaincodeActionPayload(action.Payload)
+					for _, action := range d.GetActions() {
+						chaincodeActionPayload, caPayload, err := action.GetActionPayload()
 						if err != nil {
 							return nil, nil, "", fmt.Errorf("error unmarshalling transaction action payload for block event: %s", err)
 						}
@@ -72,17 +75,12 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 							logger.Debugf("chaincode action, the payload action is nil, skipping")
 							continue
 						}
-						propRespPayload, err := utils.GetProposalResponsePayload(chaincodeActionPayload.Action.ProposalResponsePayload)
+						propRespPayload, err := action.GetProposalResponsePayload()
 						if err != nil {
 							return nil, nil, "", fmt.Errorf("error unmarshalling proposal response payload for block event: %s", err)
 						}
-						//ENDORSER_ACTION, ProposalResponsePayload.Extension field contains ChaincodeAction
-						caPayload, err := utils.GetChaincodeAction(propRespPayload.Extension)
-						if err != nil {
-							return nil, nil, "", fmt.Errorf("error unmarshalling chaincode action for block event: %s", err)
-						}
 
-						ccEvent, err := utils.GetChaincodeEvents(caPayload.Events)
+						ccEvent, err := action.GetEvent()
 						if err != nil {
 							return nil, nil, "", fmt.Errorf("error unmarshalling chaincode event for block event: %s", err)
 						}
@@ -106,7 +104,7 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 						if err != nil {
 							return nil, nil, "", fmt.Errorf("error marshalling tx proposal payload for block event: %s", err)
 						}
-						action.Payload, err = utils.GetBytesChaincodeActionPayload(chaincodeActionPayload)
+						action.Raw.Payload, err = utils.GetBytesChaincodeActionPayload(chaincodeActionPayload)
 						if err != nil {
 							return nil, nil, "", fmt.Errorf("error marshalling tx action payload for block event: %s", err)
 						}
@@ -122,14 +120,14 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 					if err != nil {
 						return nil, nil, "", fmt.Errorf("error marshalling tx envelope for block event: %s", err)
 					}
-					ebytes, err = utils.GetBytesEnvelope(env)
+					result, err = utils.GetBytesEnvelope(env)
 					if err != nil {
 						return nil, nil, "", fmt.Errorf("cannot marshal transaction: %s", err)
 					}
 				}
 			}
 		}
-		blockForEvent.Data.Data = append(blockForEvent.Data.Data, ebytes)
+		blockForEvent.Data.Data = append(blockForEvent.Data.Data, result)
 	}
 	filteredBlockForEvent.ChannelId = channelID
 	filteredBlockForEvent.Number = block.Header.Number

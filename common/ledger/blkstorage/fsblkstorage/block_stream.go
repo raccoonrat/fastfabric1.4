@@ -17,11 +17,8 @@ limitations under the License.
 package fsblkstorage
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -35,8 +32,6 @@ var ErrUnexpectedEndOfBlockfile = errors.New("unexpected end of blockfile")
 // It starts from the given offset and can traverse till the end of the file
 type blockfileStream struct {
 	fileNum       int
-	file          *os.File
-	reader        *bufio.Reader
 	currentOffset int64
 }
 
@@ -64,20 +59,8 @@ type blockPlacementInfo struct {
 func newBlockfileStream(rootDir string, fileNum int, startOffset int64) (*blockfileStream, error) {
 	filePath := deriveBlockfilePath(rootDir, fileNum)
 	logger.Debugf("newBlockfileStream(): filePath=[%s], startOffset=[%d]", filePath, startOffset)
-	var file *os.File
-	var err error
-	if file, err = os.OpenFile(filePath, os.O_RDONLY, 0600); err != nil {
-		return nil, err
-	}
-	var newPosition int64
-	if newPosition, err = file.Seek(startOffset, 0); err != nil {
-		return nil, err
-	}
-	if newPosition != startOffset {
-		panic(fmt.Sprintf("Could not seek file [%s] to given startOffset [%d]. New position = [%d]",
-			filePath, startOffset, newPosition))
-	}
-	s := &blockfileStream{fileNum, file, bufio.NewReader(file), startOffset}
+
+	s := &blockfileStream{fileNum, startOffset}
 	return s, nil
 }
 
@@ -92,29 +75,8 @@ func (s *blockfileStream) nextBlockBytes() ([]byte, error) {
 // which is possible towards the tail of the file if a crash had taken place during appending of a block
 func (s *blockfileStream) nextBlockBytesAndPlacementInfo() ([]byte, *blockPlacementInfo, error) {
 	var lenBytes []byte
-	var err error
-	var fileInfo os.FileInfo
 	moreContentAvailable := true
 
-	if fileInfo, err = s.file.Stat(); err != nil {
-		return nil, nil, err
-	}
-	if s.currentOffset == fileInfo.Size() {
-		logger.Debugf("Finished reading file number [%d]", s.fileNum)
-		return nil, nil, nil
-	}
-	remainingBytes := fileInfo.Size() - s.currentOffset
-	// Peek 8 or smaller number of bytes (if remaining bytes are less than 8)
-	// Assumption is that a block size would be small enough to be represented in 8 bytes varint
-	peekBytes := 8
-	if remainingBytes < int64(peekBytes) {
-		peekBytes = int(remainingBytes)
-		moreContentAvailable = false
-	}
-	logger.Debugf("Remaining bytes=[%d], Going to peek [%d] bytes", remainingBytes, peekBytes)
-	if lenBytes, err = s.reader.Peek(peekBytes); err != nil {
-		return nil, nil, err
-	}
 	length, n := proto.DecodeVarint(lenBytes)
 	if n == 0 {
 		// proto.DecodeVarint did not consume any byte at all which means that the bytes
@@ -124,21 +86,8 @@ func (s *blockfileStream) nextBlockBytesAndPlacementInfo() ([]byte, *blockPlacem
 		}
 		panic(fmt.Errorf("Error in decoding varint bytes [%#v]", lenBytes))
 	}
-	bytesExpected := int64(n) + int64(length)
-	if bytesExpected > remainingBytes {
-		logger.Debugf("At least [%d] bytes expected. Remaining bytes = [%d]. Returning with error [%s]",
-			bytesExpected, remainingBytes, ErrUnexpectedEndOfBlockfile)
-		return nil, nil, ErrUnexpectedEndOfBlockfile
-	}
 	// skip the bytes representing the block size
-	if _, err = s.reader.Discard(n); err != nil {
-		return nil, nil, err
-	}
 	blockBytes := make([]byte, length)
-	if _, err = io.ReadAtLeast(s.reader, blockBytes, int(length)); err != nil {
-		logger.Debugf("Error while trying to read [%d] bytes from fileNum [%d]: %s", length, s.fileNum, err)
-		return nil, nil, err
-	}
 	blockPlacementInfo := &blockPlacementInfo{
 		fileNum:          s.fileNum,
 		blockStartOffset: s.currentOffset,
@@ -149,7 +98,7 @@ func (s *blockfileStream) nextBlockBytesAndPlacementInfo() ([]byte, *blockPlacem
 }
 
 func (s *blockfileStream) close() error {
-	return s.file.Close()
+	return nil
 }
 
 ///////////////////////////////////

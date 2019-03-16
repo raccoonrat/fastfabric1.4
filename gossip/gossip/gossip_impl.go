@@ -8,7 +8,10 @@ package gossip
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"github.com/fabric_extension/grpcmocks"
+
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -1062,7 +1065,9 @@ func (sa *discoverySecurityAdapter) validateAliveMsgSignature(m *proto.SignedGos
 	am := m.GetAliveMsg()
 	// At this point we got the certificate of the peer, proceed to verifying the AliveMessage
 	verifier := func(peerIdentity []byte, signature, message []byte) error {
-		return sa.mcs.Verify(api.PeerIdentityType(peerIdentity), signature, message)
+		 _,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:message, Signature:signature, Creator:peerIdentity})
+
+		return err
 	}
 
 	// We verify the signature on the message
@@ -1208,7 +1213,9 @@ func (g *gossipServiceImpl) validateLeadershipMessage(msg *proto.SignedGossipMes
 		return errors.Wrap(err, "Unable to fetch PKI-ID from id-mapper")
 	}
 	return msg.Verify(identity, func(peerIdentity []byte, signature, message []byte) error {
-		return g.mcs.Verify(identity, signature, message)
+		_,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:message, Signature:signature, Creator:peerIdentity})
+
+		return err
 	})
 }
 

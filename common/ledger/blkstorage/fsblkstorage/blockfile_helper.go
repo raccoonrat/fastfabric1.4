@@ -7,12 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package fsblkstorage
 
 import (
-	"fmt"
-	"io/ioutil"
-	"os"
-	"strconv"
-	"strings"
-
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hyperledger/fabric/protos/common"
 )
@@ -42,8 +36,6 @@ func constructCheckpointInfoFromBlockFiles(rootDir string) (*checkpointInfo, err
 		return cpInfo, nil
 	}
 
-	fileInfo := getFileInfoOrPanic(rootDir, lastFileNum)
-	logger.Debugf("Last Block file info: FileName=[%s], FileSize=[%d]", fileInfo.Name(), fileInfo.Size())
 	if lastBlockBytes, endOffsetLastBlock, numBlocksInFile, err = scanForLastCompleteBlock(rootDir, lastFileNum, 0); err != nil {
 		logger.Errorf("Error while scanning last file [file num=%d]: %s", lastFileNum, err)
 		return nil, err
@@ -51,8 +43,6 @@ func constructCheckpointInfoFromBlockFiles(rootDir string) (*checkpointInfo, err
 
 	if numBlocksInFile == 0 && lastFileNum > 0 {
 		secondLastFileNum := lastFileNum - 1
-		fileInfo := getFileInfoOrPanic(rootDir, secondLastFileNum)
-		logger.Debugf("Second last Block file info: FileName=[%s], FileSize=[%d]", fileInfo.Name(), fileInfo.Size())
 		if lastBlockBytes, _, _, err = scanForLastCompleteBlock(rootDir, secondLastFileNum, 0); err != nil {
 			logger.Errorf("Error while scanning second last file [file num=%d]: %s", secondLastFileNum, err)
 			return nil, err
@@ -80,38 +70,7 @@ func constructCheckpointInfoFromBlockFiles(rootDir string) (*checkpointInfo, err
 func retrieveLastFileSuffix(rootDir string) (int, error) {
 	logger.Debugf("retrieveLastFileSuffix()")
 	biggestFileNum := -1
-	filesInfo, err := ioutil.ReadDir(rootDir)
-	if err != nil {
-		return -1, err
-	}
-	for _, fileInfo := range filesInfo {
-		name := fileInfo.Name()
-		if fileInfo.IsDir() || !isBlockFileName(name) {
-			logger.Debugf("Skipping File name = %s", name)
-			continue
-		}
-		fileSuffix := strings.TrimPrefix(name, blockfilePrefix)
-		fileNum, err := strconv.Atoi(fileSuffix)
-		if err != nil {
-			return -1, err
-		}
-		if fileNum > biggestFileNum {
-			biggestFileNum = fileNum
-		}
-	}
 	logger.Debugf("retrieveLastFileSuffix() - biggestFileNum = %d", biggestFileNum)
-	return biggestFileNum, err
+	return biggestFileNum, nil
 }
 
-func isBlockFileName(name string) bool {
-	return strings.HasPrefix(name, blockfilePrefix)
-}
-
-func getFileInfoOrPanic(rootDir string, fileNum int) os.FileInfo {
-	filePath := deriveBlockfilePath(rootDir, fileNum)
-	fileInfo, err := os.Lstat(filePath)
-	if err != nil {
-		panic(fmt.Errorf("Error in retrieving file info for file num = %d", fileNum))
-	}
-	return fileInfo
-}

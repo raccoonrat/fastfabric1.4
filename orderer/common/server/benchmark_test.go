@@ -101,19 +101,19 @@ import (
 //
 
 const (
-	MaxMessageCount = 10
+	MaxMessageCount = 100
 
 	// This is the hard limit for all types of tx, including config tx, which is normally
 	// larger than 13 KB. Therefore, for config tx not to be rejected, this value cannot
 	// be less than 13 KB.
-	AbsoluteMaxBytes  = 16 // KB
-	PreferredMaxBytes = 10 // KB
+	AbsoluteMaxBytes  = 512 // KB
+	PreferredMaxBytes = 512 // KB
 	ChannelProfile    = genesisconfig.SampleSingleMSPChannelProfile
 )
 
 var envvars = map[string]string{
 	"ORDERER_GENERAL_GENESISPROFILE":                              genesisconfig.SampleDevModeSoloProfile,
-	"ORDERER_GENERAL_LEDGERTYPE":                                  "file",
+	"ORDERER_GENERAL_LEDGERTYPE":                                  "ram",
 	"ORDERER_GENERAL_LOGLEVEL":                                    "error",
 	"ORDERER_KAFKA_VERBOSE":                                       "false",
 	genesisconfig.Prefix + "_ORDERER_BATCHSIZE_MAXMESSAGECOUNT":   strconv.Itoa(MaxMessageCount),
@@ -145,6 +145,14 @@ func (f factors) String() string {
 	)
 }
 
+
+func setupSubTest(t *testing.T) func(t *testing.T) {
+    t.Log("setup sub test")
+    return func(t *testing.T) {
+        t.Log("teardown sub test")
+    }
+}
+
 // As benchmark tests are skipped by default, we put this test here to catch
 // potential code changes that might break benchmark tests. If this test fails,
 // it is likely that benchmark tests need to be updated.
@@ -174,7 +182,7 @@ func TestOrdererBenchmarkSoloBroadcast(t *testing.T) {
 		channelCounts             = []int{1, 10, 50}
 		totalTx                   = []int{10000}
 		messagesSizes             = []int{1, 2, 10}
-		broadcastClientPerChannel = []int{1, 10, 50}
+		broadcastClientPerChannel = []int{1, 10, 24, 50}
 		deliverClientPerChannel   = []int{0} // We are not interested in deliver performance here
 		numOfOrderer              = []int{1}
 
@@ -266,8 +274,8 @@ func TestOrdererBenchmarkKafkaBroadcast(t *testing.T) {
 	var (
 		channelCounts             = []int{1, 10}
 		totalTx                   = []int{10000}
-		messagesSizes             = []int{1, 2, 10}
-		broadcastClientPerChannel = []int{1, 10, 50}
+		messagesSizes             = []int{0, 1, 2, 3, 5}
+		broadcastClientPerChannel = []int{1, 10, 24, 50, 300}
 		deliverClientPerChannel   = []int{0} // We are not interested in deliver performance here
 		numOfOrderer              = []int{1, 5, 10}
 
@@ -313,8 +321,8 @@ func TestOrdererBenchmarkKafkaDeliver(t *testing.T) {
 
 	var (
 		channelCounts             = []int{1, 10}
-		totalTx                   = []int{10000}
-		messagesSizes             = []int{1, 2, 10}
+		totalTx                   = []int{100000}
+		messagesSizes             = []int{0, 1, 2, 10}
 		broadcastClientPerChannel = []int{50}
 		deliverClientPerChannel   = []int{1, 10, 50}
 		numOfOrderer              = []int{1, 5, 10}
@@ -413,7 +421,8 @@ func benchmarkOrderer(
 			localConf.FileLedger.Location = tempDir
 			defer os.RemoveAll(tempDir)
 		}
-
+                localConf.General.ListenAddress = "0.0.0.0"
+                localConf.General.ListenPort = 7050+ uint16(i)
 		go Start("benchmark", &localConf)
 	}
 
@@ -545,10 +554,13 @@ func benchmarkOrderer(
 	ordererProfile := os.Getenv("ORDERER_GENERAL_GENESISPROFILE")
 
 	fmt.Printf(
-		"Messages: %6d  Message Size: %3dKB  Channels: %3d Orderer (%s): %2d | "+
+		"Messages: %6d TxPerBlock: %2d BlockPerChannel %d ActualMsgSize: %dB  Message Size: %3dKB  Channels: %3d Orderer (%s): %2d | "+
 			"Broadcast Clients: %3d  Write tps: %5.1f tx/s Elapsed Time: %0.2fs | "+
-			"Deliver clients: %3d  Read tps: %8.1f blk/s Elapsed Time: %0.2fs\n",
+			"Deliver clients: %3d  Read tps: %8.1f blk/s Elapsed Time: %0.3fs\n",
 		totalTx,
+                txPerBlk,
+		blkPerChannel,
+                actualMsgSize,
 		msgSize,
 		numOfChannels,
 		ordererProfile,
@@ -557,7 +569,8 @@ func benchmarkOrderer(
 		float64(totalTx)/btime.Seconds(),
 		btime.Seconds(),
 		deliverClientPerChannel*numOfChannels*numOfOrderer,
-		float64(blkPerChannel*deliverClientPerChannel*numOfChannels)/dtime.Seconds(),
+		//float64(blkPerChannel*deliverClientPerChannel*numOfChannels)/dtime.Seconds(),
+		float64(blkPerChannel)/dtime.Seconds(),
 		dtime.Seconds())
 }
 
@@ -628,4 +641,78 @@ func stoi(s []string) (ret []interface{}) {
 		ret[i] = d
 	}
 	return
+
+}
+
+func TestOrdererKafka( t *testing.T) {
+for key, value := range envvars {
+		os.Setenv(key, value)
+		defer os.Unsetenv(key)
+	}
+
+cleanup := configtest.SetDevFabricConfigPath(t)
+	defer cleanup()
+
+    numOfOrderer := 1
+    // numOfChannels := 1
+    
+    // Initialization shared by all orderers
+    conf, err := localconfig.Load()
+    if err != nil {
+        fmt.Print("failed to load config")
+    }
+
+    fmt.Print("Init. Local MSP")
+    // server.initializeLoggingLevel(conf)
+    initializeLocalMsp(conf)
+    perf.InitializeServerPool(numOfOrderer)
+
+    // Load sample channel profile
+    // channelProfile := genesisconfig.Load(ChannelProfile)
+
+   
+    // Generate a random system channel id for each test run,
+    // so it does not recover ledgers from previous run.
+    systemchannel := "system-channel-" + perf.RandomID(5)
+    conf.General.SystemChannel = systemchannel
+
+    
+    // Spawn orderers
+    for i := 0; i < numOfOrderer; i++ {
+        // If we are using json or file ledger, we should use temp dir for ledger location
+        // because default location "/var/hyperledger/production/orderer" in sample config
+        // isn't always writable. Also separate dirs are created for each orderer instance
+        // as leveldb cannot share the same dir. These temp dirs are cleaned up after each
+        // test run.
+        //
+        // We need to make a copy of config here so that multiple orderers won't refer to
+        // the same config object by address.
+        localConf := localconfig.TopLevel(*conf)
+        if localConf.General.LedgerType != "ram" {
+            tempDir, _ := ioutil.TempDir("", "fabric-benchmark-test-")
+             if err != nil { // Handle errors reading the config file
+                fmt.Print("Should be able to create temp dir", err)
+            }
+            // assert.NoError(t, err, "Should be able to create temp dir")
+            localConf.FileLedger.Location = tempDir
+            defer os.RemoveAll(tempDir)
+        }
+
+        go Start("benchmark", &localConf)
+    }
+
+    defer perf.OrdererExec(perf.Halt)
+
+    // Wait for server to boot and systemchannel to be ready
+    perf.OrdererExec(perf.WaitForService)
+    // perf.OrdererExecWithArgs(perf.WaitForChannels, systemchannel)
+
+    // Create channels
+    
+    fmt.Printf("Sleeping.. ")
+    for {
+
+    time.Sleep(10 * time.Second)
+    }
+    fmt.Print("End.. ")
 }

@@ -8,7 +8,9 @@ package cauthdsl
 
 import (
 	"fmt"
+	"github.com/fabric_extension/grpcmocks"
 	"time"
+	ct "context"
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/msp"
@@ -108,7 +110,7 @@ func compile(policy *cb.SignaturePolicy, identities []*mb.MSPPrincipal, deserial
 					continue
 				}
 				cauthdslLogger.Debugf("%p principal matched by identity %d", signedData, i)
-				err = identity.Verify(sd.Data, sd.Signature)
+				_,err = grpcmocks.CrClient.Verify(ct.Background(), &grpcmocks.Transaction{Data: sd.Data, Signature:sd.Signature, Creator:sd.Identity})
 				if err != nil {
 					cauthdslLogger.Debugf("%p signature for identity %d is invalid: %s", signedData, i, err)
 					continue

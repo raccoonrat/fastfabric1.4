@@ -7,8 +7,11 @@ SPDX-License-Identifier: Apache-2.0
 package kvledger
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/fabric_extension/block_cache"
+	"github.com/fabric_extension/grpcmocks"
 	"sync"
 
 	"github.com/hyperledger/fabric/core/ledger/pvtdatapolicy"
@@ -24,7 +27,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr/lockbasedtxmgr"
-	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
@@ -37,7 +39,7 @@ var logger = flogging.MustGetLogger("kvledger")
 type kvLedger struct {
 	ledgerID               string
 	blockStore             *ledgerstorage.Store
-	txtmgmt                txmgr.TxMgr
+	txtmgmt                txmgr.FastTxMgr
 	historyDB              historydb.HistoryDB
 	configHistoryRetriever ledger.ConfigHistoryRetriever
 	blockAPIsRWLock        *sync.RWMutex
@@ -247,10 +249,46 @@ func (l *kvLedger) NewHistoryQueryExecutor() (ledger.HistoryQueryExecutor, error
 	return l.historyDB.NewHistoryQueryExecutor(l.blockStore)
 }
 
+func (l *kvLedger) CommitWithPvtDataByNo(blockNo uint64) error {
+	var err error
+
+	logger.Debugf("Channel [%s]: Validating state for block [%d]", l.ledgerID, blockNo)
+	err = l.txtmgmt.ValidateAndPrepareByNo(blockNo, true)
+	if err != nil {
+		return err
+	}
+
+	logger.Debugf("Channel [%s]: Committing block [%d] to storage", l.ledgerID, blockNo)
+
+	//l.blockAPIsRWLock.Lock()
+	//defer l.blockAPIsRWLock.Unlock()
+	//if err = l.blockStore.CommitWithPvtData(pvtdataAndBlock); err != nil {
+	//	return err
+	//}
+	//logger.Infof("Channel [%s]: Committed block [%d] with %d transaction(s)", l.ledgerID, block.Header.Number, len(block.Data.Data))
+
+	logger.Debugf("Channel [%s]: Committing block [%d] transactions to state database", l.ledgerID, blockNo)
+	if err = l.txtmgmt.Commit(); err != nil {
+		panic(fmt.Errorf(`Error during commit to txmgr:%s`, err))
+	}
+
+	//// History database could be written in parallel with state and/or async as a future optimization
+	//if ledgerconfig.IsHistoryDBEnabled() {
+	//	logger.Debugf("Channel [%s]: Committing block [%d] transactions to history database", l.ledgerID, blockNo)
+	//	if err := l.historyDB.Commit(block); err != nil {
+	//		panic(fmt.Errorf(`Error during commit to history db:%s`, err))
+	//	}
+	//}
+
+	go grpcmocks.StClient.Store(context.Background(), func()*common.Block{b,_:=blocks.Cache.Get(blockNo); return b.Rawblock}())
+
+	return nil
+}
+
 // CommitWithPvtData commits the block and the corresponding pvt data in an atomic operation
 func (l *kvLedger) CommitWithPvtData(pvtdataAndBlock *ledger.BlockAndPvtData) error {
 	var err error
-	block := pvtdataAndBlock.Block
+	//block := pvtdataAndBlock.Block
 	blockNo := pvtdataAndBlock.Block.Header.Number
 
 	logger.Debugf("Channel [%s]: Validating state for block [%d]", l.ledgerID, blockNo)
@@ -261,25 +299,25 @@ func (l *kvLedger) CommitWithPvtData(pvtdataAndBlock *ledger.BlockAndPvtData) er
 
 	logger.Debugf("Channel [%s]: Committing block [%d] to storage", l.ledgerID, blockNo)
 
-	l.blockAPIsRWLock.Lock()
-	defer l.blockAPIsRWLock.Unlock()
-	if err = l.blockStore.CommitWithPvtData(pvtdataAndBlock); err != nil {
-		return err
-	}
-	logger.Infof("Channel [%s]: Committed block [%d] with %d transaction(s)", l.ledgerID, block.Header.Number, len(block.Data.Data))
+	//l.blockAPIsRWLock.Lock()
+	//defer l.blockAPIsRWLock.Unlock()
+	//if err = l.blockStore.CommitWithPvtData(pvtdataAndBlock); err != nil {
+	//	return err
+	//}
+	//logger.Infof("Channel [%s]: Committed block [%d] with %d transaction(s)", l.ledgerID, block.Header.Number, len(block.Data.Data))
 
 	logger.Debugf("Channel [%s]: Committing block [%d] transactions to state database", l.ledgerID, blockNo)
 	if err = l.txtmgmt.Commit(); err != nil {
 		panic(fmt.Errorf(`Error during commit to txmgr:%s`, err))
 	}
 
-	// History database could be written in parallel with state and/or async as a future optimization
-	if ledgerconfig.IsHistoryDBEnabled() {
-		logger.Debugf("Channel [%s]: Committing block [%d] transactions to history database", l.ledgerID, blockNo)
-		if err := l.historyDB.Commit(block); err != nil {
-			panic(fmt.Errorf(`Error during commit to history db:%s`, err))
-		}
-	}
+	//// History database could be written in parallel with state and/or async as a future optimization
+	//if ledgerconfig.IsHistoryDBEnabled() {
+	//	logger.Debugf("Channel [%s]: Committing block [%d] transactions to history database", l.ledgerID, blockNo)
+	//	if err := l.historyDB.Commit(block); err != nil {
+	//		panic(fmt.Errorf(`Error during commit to history db:%s`, err))
+	//	}
+	//}
 	return nil
 }
 

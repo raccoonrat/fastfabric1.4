@@ -10,11 +10,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/fabric_extension/db"
 
 	"github.com/hyperledger/fabric/core/ledger/confighistory"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/bookkeeping"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb"
@@ -24,7 +25,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -187,6 +187,8 @@ func (provider *Provider) Close() {
 // state. Recovery checks if the ledger was created and the genesis block was committed successfully then it completes
 // the last step of adding the ledger id to the list of created ledgers. Else, it clears the under construction flag
 func (provider *Provider) recoverUnderConstructionLedger() {
+	//Recovery was beyond the scope of FastFabric
+	return
 	logger.Debugf("Recovering under construction ledger")
 	ledgerID, err := provider.idStore.getUnderConstructionFlag()
 	panicOnErr(err, "Error while checking whether the under construction flag is set")
@@ -242,13 +244,11 @@ func panicOnErr(err error, mgsFormat string, args ...interface{}) {
 // Ledger id persistence related code
 ///////////////////////////////////////////////////////////////////////
 type idStore struct {
-	db *leveldbhelper.DB
+	db *dbhelper.DBHandle
 }
 
 func openIDStore(path string) *idStore {
-	db := leveldbhelper.CreateDB(&leveldbhelper.Conf{DBPath: path})
-	db.Open()
-	return &idStore{db}
+	return &idStore{&dbhelper.DBHandle{"", db.New()}}
 }
 
 func (s *idStore) setUnderConstructionFlag(ledgerID string) error {
@@ -271,16 +271,20 @@ func (s *idStore) createLedgerID(ledgerID string, gb *common.Block) error {
 	key := s.encodeLedgerKey(ledgerID)
 	var val []byte
 	var err error
-	if val, err = proto.Marshal(gb); err != nil {
-		return err
-	}
+
 	if val, err = s.db.Get(key); err != nil {
 		return err
 	}
 	if val != nil {
 		return ErrLedgerIDExists
 	}
-	batch := &leveldb.Batch{}
+
+	if val, err = proto.Marshal(gb); err != nil {
+		return err
+	}
+
+	batch := dbhelper.NewUpdateBatch()
+
 	batch.Put(key, val)
 	batch.Delete(underConstructionLedgerKey)
 	return s.db.WriteBatch(batch, true)
@@ -313,7 +317,7 @@ func (s *idStore) getAllLedgerIds() ([]string, error) {
 }
 
 func (s *idStore) close() {
-	s.db.Close()
+	return
 }
 
 func (s *idStore) encodeLedgerKey(ledgerID string) []byte {

@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+import "protos/common/common.proto";
+
+package grpcmocks;
+
+service Crypto {
+    rpc Verify (Transaction) returns (Result) {    }
+    rpc CompareHash (CompareMessage) returns (Result){}
+}
+
+service Storage {
+    rpc Store(common.Block) returns (Result) {    }
+}
+
+message Transaction {
+    bytes Creator = 1;
+    bytes Data = 2;
+    bytes Signature = 3;
+    string ChainID = 4;
+
+}
+
+message Result {
+}
+
+message CompareMessage{
+    bytes ChannelHdr=1;
+    bytes ActionHdr=2;
+    bytes ProposalPayload=3;
+    bytes ProposalHash=4;
+}
+
+message Envelopes{
+    repeated bytes Envs=1;
+}

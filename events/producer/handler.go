@@ -7,7 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package producer
 
 import (
+	"context"
 	"fmt"
+	"github.com/fabric_extension/grpcmocks"
 	"math"
 	"strconv"
 	"time"
@@ -213,7 +215,7 @@ func (h *handler) validateEventMessage(signedEvt *pb.SignedEvent) (*pb.Event, er
 	}
 
 	// Verify the signature
-	err = id.Verify(signedEvt.EventBytes, signedEvt.Signature)
+	_,err = grpcmocks.CrClient.Verify(context.Background(),&grpcmocks.Transaction{Data:signedEvt.EventBytes, Signature:signedEvt.Signature,Creator:evt.Creator})
 	if err != nil {
 		return nil, fmt.Errorf("failed verifying the event signature: %s", err)
 	}

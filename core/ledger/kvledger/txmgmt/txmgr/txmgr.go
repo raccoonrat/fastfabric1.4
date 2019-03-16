@@ -33,6 +33,10 @@ type TxMgr interface {
 	Rollback()
 	Shutdown()
 }
+type FastTxMgr interface{
+	TxMgr
+	ValidateAndPrepareByNo(blockNo uint64, doMVCCValidation bool) error
+}
 
 // ErrUnsupportedTransaction is expected to be thrown if a unsupported query is performed in an update transaction
 type ErrUnsupportedTransaction struct {

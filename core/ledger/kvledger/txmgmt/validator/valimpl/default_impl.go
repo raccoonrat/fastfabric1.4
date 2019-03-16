@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package valimpl
 
 import (
+	"github.com/fabric_extension/block_cache"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
@@ -25,20 +26,24 @@ var logger = flogging.MustGetLogger("valimpl")
 type DefaultImpl struct {
 	txmgr txmgr.TxMgr
 	db    privacyenabledstate.DB
+	valinternal.FastInternalValidator
 	valinternal.InternalValidator
 }
 
 // NewStatebasedValidator constructs a validator that internally manages statebased validator and in addition
 // handles the tasks that are agnostic to a particular validation scheme such as parsing the block and handling the pvt data
-func NewStatebasedValidator(txmgr txmgr.TxMgr, db privacyenabledstate.DB) validator.Validator {
-	return &DefaultImpl{txmgr, db, statebasedval.NewValidator(db)}
+func NewStatebasedValidator(txmgr txmgr.TxMgr, db privacyenabledstate.DB) validator.FastValidator {
+	val := statebasedval.NewValidator(db)
+	return &DefaultImpl{txmgr, db, val, val}
 }
 
 // ValidateAndPrepareBatch implements the function in interface validator.Validator
 func (impl *DefaultImpl) ValidateAndPrepareBatch(blockAndPvtdata *ledger.BlockAndPvtData,
 	doMVCCValidation bool) (*privacyenabledstate.UpdateBatch, error) {
-	block := blockAndPvtdata.Block
-	logger.Debugf("ValidateAndPrepareBatch() for block number = [%d]", block.Header.Number)
+	rawblock := blockAndPvtdata.Block
+	logger.Debugf("ValidateAndPrepareBatch() for block number = [%d]", rawblock.Header.Number)
+	block,_:=blocks.Cache.Get(rawblock.Header.Number)
+
 	var internalBlock *valinternal.Block
 	var pubAndHashUpdates *valinternal.PubAndHashUpdates
 	var pvtUpdates *privacyenabledstate.PvtUpdateBatch
@@ -57,7 +62,36 @@ func (impl *DefaultImpl) ValidateAndPrepareBatch(blockAndPvtdata *ledger.BlockAn
 		return nil, err
 	}
 	logger.Debug("postprocessing ProtoBlock...")
-	postprocessProtoBlock(block, internalBlock)
+	postprocessProtoBlock(rawblock, internalBlock)
+	logger.Debug("ValidateAndPrepareBatch() complete")
+	return &privacyenabledstate.UpdateBatch{
+		PubUpdates:  pubAndHashUpdates.PubUpdates,
+		HashUpdates: pubAndHashUpdates.HashUpdates,
+		PvtUpdates:  pvtUpdates,
+	}, nil
+}
+
+
+func (impl *DefaultImpl) ValidateAndPrepareBatchByNo(blockNo uint64,
+	doMVCCValidation bool) (*privacyenabledstate.UpdateBatch, error) {
+	logger.Debugf("ValidateAndPrepareBatch() for block number = [%d]", blockNo)
+
+	var pubAndHashUpdates *valinternal.PubAndHashUpdates
+	var pvtUpdates *privacyenabledstate.PvtUpdateBatch
+	var err error
+
+	logger.Debug("preprocessing ProtoBlock...")
+	if err = preprocessProtoBlockByNo(impl.txmgr, impl.db.ValidateKeyValue, blockNo, doMVCCValidation); err != nil {
+		return nil, err
+	}
+
+	if pubAndHashUpdates, err = impl.FastInternalValidator.ValidateAndPrepareBatchByNo(blockNo, doMVCCValidation); err != nil {
+		return nil, err
+	}
+	logger.Debug("validating rwset...")
+	if pvtUpdates, err = validateAndPreparePvtBatchByNo( blockNo); err != nil {
+		return nil, err
+	}
 	logger.Debug("ValidateAndPrepareBatch() complete")
 	return &privacyenabledstate.UpdateBatch{
 		PubUpdates:  pubAndHashUpdates.PubUpdates,

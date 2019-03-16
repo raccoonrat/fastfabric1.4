@@ -6,12 +6,15 @@ SPDX-License-Identifier: Apache-2.0
 package statebasedval
 
 import (
+	"github.com/fabric_extension/block_cache"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/valinternal"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
+	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 	"github.com/hyperledger/fabric/protos/peer"
 )
@@ -85,6 +88,62 @@ func (v *Validator) preLoadCommittedVersionOfRSet(block *valinternal.Block) erro
 	return nil
 }
 
+func (v *Validator) preLoadCommittedVersionOfRSetByNo(blockNo uint64) error {
+	block, _:=blocks.Cache.Get(blockNo)
+
+	// Collect both public and hashed keys in read sets of all transactions in a given block
+	var pubKeys []*statedb.CompositeKey
+	var hashedKeys []*privacyenabledstate.HashedCompositeKey
+
+	// pubKeysMap and hashedKeysMap are used to avoid duplicate entries in the
+	// pubKeys and hashedKeys. Though map alone can be used to collect keys in
+	// read sets and pass as an argument in LoadCommittedVersionOfPubAndHashedKeys(),
+	// array is used for better code readability. On the negative side, this approach
+	// might use some extra memory.
+	pubKeysMap := make(map[statedb.CompositeKey]interface{})
+	hashedKeysMap := make(map[privacyenabledstate.HashedCompositeKey]interface{})
+
+	for _, tx := range block.Txs {
+		rwSet, _ :=tx.GetActions()[0].GetRwSet()
+		for _, nsRWSet := range rwSet.NsRwSets {
+			for _, kvRead := range nsRWSet.KvRwSet.Reads {
+				compositeKey := statedb.CompositeKey{
+					Namespace: nsRWSet.NameSpace,
+					Key:       kvRead.Key,
+				}
+				if _, ok := pubKeysMap[compositeKey]; !ok {
+					pubKeysMap[compositeKey] = nil
+					pubKeys = append(pubKeys, &compositeKey)
+				}
+
+			}
+			for _, colHashedRwSet := range nsRWSet.CollHashedRwSets {
+				for _, kvHashedRead := range colHashedRwSet.HashedRwSet.HashedReads {
+					hashedCompositeKey := privacyenabledstate.HashedCompositeKey{
+						Namespace:      nsRWSet.NameSpace,
+						CollectionName: colHashedRwSet.CollectionName,
+						KeyHash:        string(kvHashedRead.KeyHash),
+					}
+					if _, ok := hashedKeysMap[hashedCompositeKey]; !ok {
+						hashedKeysMap[hashedCompositeKey] = nil
+						hashedKeys = append(hashedKeys, &hashedCompositeKey)
+					}
+				}
+			}
+		}
+	}
+
+	// Load committed version of all keys into a cache
+	if len(pubKeys) > 0 || len(hashedKeys) > 0 {
+		err := v.db.LoadCommittedVersionsOfPubAndHashedKeys(pubKeys, hashedKeys)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // ValidateAndPrepareBatch implements method in Validator interface
 func (v *Validator) ValidateAndPrepareBatch(block *valinternal.Block, doMVCCValidation bool) (*valinternal.PubAndHashUpdates, error) {
 	// Check whether statedb implements BulkOptimizable interface. For now,
@@ -113,6 +172,43 @@ func (v *Validator) ValidateAndPrepareBatch(block *valinternal.Block, doMVCCVali
 		} else {
 			logger.Warningf("Block [%d] Transaction index [%d] TxId [%s] marked as invalid by state validator. Reason code [%s]",
 				block.Num, tx.IndexInBlock, tx.ID, validationCode.String())
+		}
+	}
+	return updates, nil
+}
+
+func (v *Validator) ValidateAndPrepareBatchByNo(blockNo uint64, doMVCCValidation bool) (*valinternal.PubAndHashUpdates, error) {
+	// Check whether statedb implements BulkOptimizable interface. For now,
+	// only CouchDB implements BulkOptimizable to reduce the number of REST
+	// API calls from peer to CouchDB instance.
+	if v.db.IsBulkOptimizable() {
+		err := v.preLoadCommittedVersionOfRSetByNo(blockNo)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	block,_:= blocks.Cache.Get(blockNo)
+	txsFilter := util.TxValidationFlags(block.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+
+	updates := valinternal.NewPubAndHashUpdates()
+	for idx, tx := range block.Txs {
+		var validationCode peer.TxValidationCode
+		var err error
+		rwset,_:= tx.GetActions()[0].GetRwSet()
+		if validationCode, err = v.validateEndorserTX(rwset, doMVCCValidation, updates); err != nil {
+			return nil, err
+		}
+
+		txsFilter.SetFlag(idx, validationCode)
+
+		if validationCode == peer.TxValidationCode_VALID {
+			//logger.Debugf("Block [%d] Transaction index [%d] TxId [%s] marked as valid by state validator", blockNo, idx, tx.ID)
+			committingTxHeight := version.NewHeight(blockNo, uint64(idx))
+			updates.ApplyWriteSet(rwset, committingTxHeight)
+		} else {
+			logger.Warningf("Block [%d] Transaction index [%d] marked as invalid by state validator. Reason code [%s]",
+				blockNo, idx, validationCode.String())
 		}
 	}
 	return updates, nil

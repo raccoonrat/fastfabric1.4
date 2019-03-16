@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package lockbasedtxmgr
 
 import (
+	"github.com/fabric_extension/block_cache"
 	"sync"
 
 	"github.com/hyperledger/fabric/core/ledger/pvtdatapolicy"
@@ -18,7 +19,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/valimpl"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
-	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 )
 
@@ -30,24 +30,29 @@ type LockBasedTxMgr struct {
 	ledgerid        string
 	db              privacyenabledstate.DB
 	pvtdataPurgeMgr *pvtdataPurgeMgr
-	validator       validator.Validator
+	validator       validator.FastValidator
 	stateListeners  []ledger.StateListener
 	commitRWLock    sync.RWMutex
 	current         *current
 }
 
 type current struct {
-	block     *common.Block
+	blockNo     uint64
+	maxTxNo uint64
 	batch     *privacyenabledstate.UpdateBatch
 	listeners []ledger.StateListener
 }
 
 func (c *current) blockNum() uint64 {
-	return c.block.Header.Number
+	return c.blockNo
 }
 
 func (c *current) maxTxNumber() uint64 {
-	return uint64(len(c.block.Data.Data)) - 1
+	if c.maxTxNo == 0{
+		b,_ := blocks.Cache.Get(c.blockNo)
+		c.maxTxNo =uint64(len(b.Txs))
+	}
+	return c.maxTxNo - 1
 }
 
 // NewLockBasedTxMgr constructs a new instance of NewLockBasedTxMgr
@@ -88,6 +93,23 @@ func (txmgr *LockBasedTxMgr) NewTxSimulator(txid string) (ledger.TxSimulator, er
 	return s, nil
 }
 
+func (txmgr *LockBasedTxMgr) ValidateAndPrepareByNo(blockNo uint64, doMVCCValidation bool) error {
+	logger.Debugf("Waiting for purge mgr to finish the background job of computing expirying keys for the block")
+	txmgr.pvtdataPurgeMgr.WaitForPrepareToFinish()
+	//logger.Debugf("Validating new block with num trans = [%d]", len(block.Data.Data))
+	batch, err := txmgr.validator.ValidateAndPrepareBatchByNo(blockNo, doMVCCValidation)
+	if err != nil {
+		txmgr.reset()
+		return err
+	}
+	txmgr.current = &current{blockNo: blockNo, batch: batch}
+	if err := txmgr.invokeNamespaceListeners(); err != nil {
+		txmgr.reset()
+		return err
+	}
+	return nil
+}
+
 // ValidateAndPrepare implements method in interface `txmgmt.TxMgr`
 func (txmgr *LockBasedTxMgr) ValidateAndPrepare(blockAndPvtdata *ledger.BlockAndPvtData, doMVCCValidation bool) error {
 	block := blockAndPvtdata.Block
@@ -99,7 +121,7 @@ func (txmgr *LockBasedTxMgr) ValidateAndPrepare(blockAndPvtdata *ledger.BlockAnd
 		txmgr.reset()
 		return err
 	}
-	txmgr.current = &current{block: block, batch: batch}
+	txmgr.current = &current{blockNo: block.Header.Number, batch: batch}
 	if err := txmgr.invokeNamespaceListeners(); err != nil {
 		txmgr.reset()
 		return err
@@ -129,16 +151,18 @@ func (txmgr *LockBasedTxMgr) Shutdown() {
 
 // Commit implements method in interface `txmgmt.TxMgr`
 func (txmgr *LockBasedTxMgr) Commit() error {
+	//Private data was out of scope for Fast Fabric, so we removed the pvtdataPurgerMgr steps
+
 	// When using the purge manager for the first block commit after peer start, the asynchronous function
 	// 'PrepareForExpiringKeys' is invoked in-line. However, for the subsequent blocks commits, this function is invoked
 	// in advance for the next block
-	if !txmgr.pvtdataPurgeMgr.usedOnce {
-		txmgr.pvtdataPurgeMgr.PrepareForExpiringKeys(txmgr.current.blockNum())
-		txmgr.pvtdataPurgeMgr.usedOnce = true
-	}
+	//if !txmgr.pvtdataPurgeMgr.usedOnce {
+	//	txmgr.pvtdataPurgeMgr.PrepareForExpiringKeys(txmgr.current.blockNum())
+	//	txmgr.pvtdataPurgeMgr.usedOnce = true
+	//}
 	defer func() {
 		txmgr.clearCache()
-		txmgr.pvtdataPurgeMgr.PrepareForExpiringKeys(txmgr.current.blockNum() + 1)
+		//txmgr.pvtdataPurgeMgr.PrepareForExpiringKeys(txmgr.current.blockNum() + 1)
 		logger.Debugf("Cleared version cache and launched the background routine for preparing keys to purge with the next block")
 		txmgr.reset()
 	}()
@@ -148,10 +172,10 @@ func (txmgr *LockBasedTxMgr) Commit() error {
 		panic("validateAndPrepare() method should have been called before calling commit()")
 	}
 
-	if err := txmgr.pvtdataPurgeMgr.DeleteExpiredAndUpdateBookkeeping(
-		txmgr.current.batch.PvtUpdates, txmgr.current.batch.HashUpdates); err != nil {
-		return err
-	}
+	//if err := txmgr.pvtdataPurgeMgr.DeleteExpiredAndUpdateBookkeeping(
+	//	txmgr.current.batch.PvtUpdates, txmgr.current.batch.HashUpdates); err != nil {
+	//	return err
+	//}
 
 	txmgr.commitRWLock.Lock()
 	defer txmgr.commitRWLock.Unlock()
@@ -163,9 +187,9 @@ func (txmgr *LockBasedTxMgr) Commit() error {
 	logger.Debugf("Updates committed to state database")
 
 	// purge manager should be called (in this call the purge mgr removes the expiry entries from schedules) after committing to statedb
-	if err := txmgr.pvtdataPurgeMgr.BlockCommitDone(); err != nil {
-		return err
-	}
+	//if err := txmgr.pvtdataPurgeMgr.BlockCommitDone(); err != nil {
+	//	return err
+	//}
 	// In the case of error state listeners will not recieve this call - instead a peer panic is caused by the ledger upon receiveing
 	// an error from this function
 	txmgr.updateStateListeners()

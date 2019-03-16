@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package privdata
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -16,7 +17,6 @@ import (
 	"github.com/hyperledger/fabric/msp"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/stretchr/testify/assert"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 )
 
 type mockStoreSupport struct {

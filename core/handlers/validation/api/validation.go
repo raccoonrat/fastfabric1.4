@@ -32,9 +32,17 @@ type Plugin interface {
 	Init(dependencies ...Dependency) error
 }
 
+// Plugin validates transactions
+type FastPlugin interface {
+	Plugin
+	// Validate returns nil if the action at the given position inside the transaction
+	// at the given position in the given block is valid, or an error if not.
+	ValidateByNo(blockNo uint64, namespace string, txPosition int, actionPosition int, contextData ...ContextDatum) error
+}
+
 // PluginFactory creates a new instance of a Plugin
 type PluginFactory interface {
-	New() Plugin
+	New() FastPlugin
 }
 
 // ExecutionFailureError indicates that the validation

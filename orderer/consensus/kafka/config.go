@@ -21,6 +21,8 @@ func newBrokerConfig(tlsConfig localconfig.TLS, retryOptions localconfig.Retry, 
 	brokerConfig := sarama.NewConfig()
 
 	brokerConfig.Consumer.Retry.Backoff = retryOptions.Consumer.RetryBackoff
+	//https://github.com/Shopify/sarama/issues/726#issuecomment-284888862
+	brokerConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
 
 	// Allows us to retrieve errors that occur when consuming a channel
 	brokerConfig.Consumer.Return.Errors = true

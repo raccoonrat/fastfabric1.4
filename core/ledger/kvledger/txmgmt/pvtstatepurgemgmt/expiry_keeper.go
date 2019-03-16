@@ -10,7 +10,7 @@ import (
 	proto "github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger/util"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/bookkeeping"
 )
 
@@ -48,7 +48,7 @@ func newExpiryKeeper(ledgerid string, provider bookkeeping.Provider) expiryKeepe
 }
 
 type expKeeper struct {
-	db *leveldbhelper.DBHandle
+	db *dbhelper.DBHandle
 }
 
 // updateBookkeeping updates the information stored in the bookkeeper
@@ -64,7 +64,7 @@ type expKeeper struct {
 // at the time of the commit of the block number 45 and the second entry was created at the time of the commit of the block number 40, however
 // both are expiring with the commit of block number 50.
 func (ek *expKeeper) updateBookkeeping(toTrack []*expiryInfo, toClear []*expiryInfoKey) error {
-	updateBatch := leveldbhelper.NewUpdateBatch()
+	updateBatch := dbhelper.NewUpdateBatch()
 	for _, expinfo := range toTrack {
 		k, v, err := encodeKV(expinfo)
 		if err != nil {

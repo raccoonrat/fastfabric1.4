@@ -18,6 +18,7 @@ package example
 
 import (
 	"github.com/golang/protobuf/proto"
+	"sync"
 
 	"github.com/hyperledger/fabric/protos/common"
 )
@@ -26,16 +27,19 @@ import (
 type Consenter struct {
 	blockNum     uint64
 	previousHash []byte
+	lock	*sync.RWMutex
 }
 
 // ConstructConsenter constructs a consenter for example
 func ConstructConsenter() *Consenter {
-	return &Consenter{1, []byte{}}
+	return &Consenter{1, []byte{}, &sync.RWMutex{}}
 }
 
 // ConstructBlock constructs a block from a list of transactions
 func (c *Consenter) ConstructBlock(transactions ...*common.Envelope) *common.Block {
 	logger.Debugf("Construct a block based on the transactions")
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	block := common.NewBlock(c.blockNum, c.previousHash)
 	for _, tx := range transactions {
 		txEnvBytes, _ := proto.Marshal(tx)
@@ -44,5 +48,6 @@ func (c *Consenter) ConstructBlock(transactions ...*common.Envelope) *common.Blo
 	block.Header.DataHash = block.Data.Hash()
 	c.blockNum++
 	c.previousHash = block.Header.Hash()
+
 	return block
 }

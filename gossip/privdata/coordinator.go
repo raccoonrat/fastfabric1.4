@@ -81,6 +81,8 @@ type Coordinator interface {
 	// StorePvtData used to persist private data into transient store
 	StorePvtData(txid string, privData *transientstore2.TxPvtReadWriteSetWithConfigInfo, blckHeight uint64) error
 
+	ValidateByNo(blockNo uint64) error
+
 	// GetPvtDataAndBlockByNum get block by number and returns also all related private data
 	// the order of private data in slice of PvtDataCollections doesn't implies the order of
 	// transactions in the block related to these private data, to get the correct placement
@@ -121,7 +123,7 @@ type Fetcher interface {
 // aggregate required functionality by single struct
 type Support struct {
 	privdata.CollectionStore
-	txvalidator.Validator
+	txvalidator.FastValidator
 	committer.Committer
 	TransientStore
 	Fetcher
@@ -148,23 +150,17 @@ func (c *coordinator) StorePvtData(txID string, privData *transientstore2.TxPvtR
 	return c.TransientStore.PersistWithConfig(txID, blkHeight, privData)
 }
 
-// StoreBlock stores block with private data into the ledger
-func (c *coordinator) StoreBlock(block *common.Block, privateDataSets util.PvtDataCollections) error {
-	if block.Data == nil {
-		return errors.New("Block data is empty")
-	}
-	if block.Header == nil {
-		return errors.New("Block header is nil")
-	}
-	logger.Infof("Received block [%d]", block.Header.Number)
-
-	logger.Debugf("Validating block [%d]", block.Header.Number)
-	err := c.Validator.Validate(block)
+func (c *coordinator) ValidateByNo(seqNum uint64) error{
+	err := c.FastValidator.ValidateByNo(seqNum)
 	if err != nil {
 		logger.Errorf("Validation failed: %+v", err)
 		return err
 	}
+	return nil
+}
 
+// StoreBlock stores block with private data into the ledger
+func (c *coordinator) StoreBlock(block *common.Block, privateDataSets util.PvtDataCollections) error {
 	blockAndPvtData := &ledger.BlockAndPvtData{
 		Block:        block,
 		BlockPvtData: make(map[uint64]*ledger.TxPvtData),

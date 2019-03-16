@@ -200,7 +200,7 @@ func (g *gossipServiceImpl) NewConfigEventer() ConfigProcessor {
 // Support aggregates functionality of several
 // interfaces required by gossip service
 type Support struct {
-	Validator            txvalidator.Validator
+	Validator            txvalidator.FastValidator
 	Committer            committer.Committer
 	Store                privdata2.TransientStore
 	Cs                   privdata.CollectionStore
@@ -236,7 +236,7 @@ func (g *gossipServiceImpl) InitializeChannel(chainID string, endpoints []string
 
 	coordinator := privdata2.NewCoordinator(privdata2.Support{
 		CollectionStore: support.Cs,
-		Validator:       support.Validator,
+		FastValidator:       support.Validator,
 		TransientStore:  support.Store,
 		Committer:       support.Committer,
 		Fetcher:         fetcher,

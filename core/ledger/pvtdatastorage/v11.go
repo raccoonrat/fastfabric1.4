@@ -8,7 +8,7 @@ package pvtdatastorage
 
 import (
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
@@ -30,7 +30,7 @@ func v11DecodePvtRwSet(encodedBytes []byte) (*rwset.TxPvtReadWriteSet, error) {
 	return writeset, proto.Unmarshal(encodedBytes, writeset)
 }
 
-func v11RetrievePvtdata(itr *leveldbhelper.Iterator, filter ledger.PvtNsCollFilter) ([]*ledger.TxPvtData, error) {
+func v11RetrievePvtdata(itr *dbhelper.Iterator, filter ledger.PvtNsCollFilter) ([]*ledger.TxPvtData, error) {
 	var blkPvtData []*ledger.TxPvtData
 	txPvtData, err := v11DecodeKV(itr.Key(), itr.Value(), filter)
 	if err != nil {

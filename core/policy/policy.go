@@ -17,10 +17,11 @@ limitations under the License.
 package policy
 
 import (
+	"context"
 	"fmt"
+	"github.com/fabric_extension/grpcmocks"
 
 	"errors"
-
 	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/msp"
 	"github.com/hyperledger/fabric/msp/mgmt"
@@ -149,7 +150,8 @@ func (p *policyChecker) CheckPolicyNoChannel(policyName string, signedProp *pb.S
 	}
 
 	// Verify the signature
-	return id.Verify(signedProp.ProposalBytes, signedProp.Signature)
+	_,err = grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:signedProp.ProposalBytes, Signature:signedProp.Signature, Creator:shdr.Creator})
+	return err
 }
 
 // CheckPolicyBySignedData checks that the passed signed data is valid with the respect to

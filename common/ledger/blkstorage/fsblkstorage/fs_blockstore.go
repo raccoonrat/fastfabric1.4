@@ -19,7 +19,7 @@ package fsblkstorage
 import (
 	"github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/common/ledger/util/dbhelper"
 
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
@@ -34,7 +34,7 @@ type fsBlockStore struct {
 
 // NewFsBlockStore constructs a `FsBlockStore`
 func newFsBlockStore(id string, conf *Conf, indexConfig *blkstorage.IndexConfig,
-	dbHandle *leveldbhelper.DBHandle) *fsBlockStore {
+	dbHandle *dbhelper.DBHandle) *fsBlockStore {
 	return &fsBlockStore{id, conf, newBlockfileMgr(id, conf, indexConfig, dbHandle)}
 }
 

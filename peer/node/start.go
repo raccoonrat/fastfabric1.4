@@ -8,6 +8,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/fabric_extension/grpcmocks"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -81,6 +82,7 @@ const (
 
 var chaincodeDevMode bool
 var orderingEndpoint string
+var storageserver string
 
 // XXXDefaultChannelMSPID should not be defined in production code
 // It should only be referenced in tests.  However, it is necessary
@@ -88,12 +90,24 @@ var orderingEndpoint string
 // this concept can be removed to testing scenarios only
 const XXXDefaultChannelMSPID = "SampleOrg"
 
+func PerfStart() *cobra.Command {
+	// Set the flags on the node start command.
+	flags := nodeStartCmd.Flags()
+	flags.BoolVarP(&chaincodeDevMode, "peer-chaincodedev", "", false,
+		"Whether peer in chaincode development mode")
+	flags.StringVarP(&orderingEndpoint, "orderer", "o", "orderer:7050", "Ordering service endpoint")
+	flags.StringVarP(&storageserver, "storage", "s", "localhost:10000", "Storage peer service endpoint")
+
+	return nodeStartCmd
+}
+
 func startCmd() *cobra.Command {
 	// Set the flags on the node start command.
 	flags := nodeStartCmd.Flags()
 	flags.BoolVarP(&chaincodeDevMode, "peer-chaincodedev", "", false,
 		"Whether peer in chaincode development mode")
 	flags.StringVarP(&orderingEndpoint, "orderer", "o", "orderer:7050", "Ordering service endpoint")
+	flags.StringVarP(&storageserver, "storage", "s", "localhost:7050", "Storage peer service endpoint")
 
 	return nodeStartCmd
 }
@@ -123,6 +137,9 @@ func serve(args []string) error {
 	if mspType != msp.FABRIC {
 		panic("Unsupported msp type " + msp.ProviderTypeToString(mspType))
 	}
+
+	fmt.Println("Starting grpc client to", storageserver)
+	grpcmocks.StartClients(storageserver)
 
 	// set the logging level for specific modules defined via environment
 	// variables or core.yaml

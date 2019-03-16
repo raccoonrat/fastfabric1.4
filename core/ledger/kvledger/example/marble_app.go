@@ -79,7 +79,7 @@ func (marbleApp *MarbleApp) CreateMarble(args []string) (*common.Envelope, error
 	if pubSimBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
 		return nil, err
 	}
-	tx := constructTransaction(pubSimBytes)
+	tx := constructTransaction(marbleApp.name, pubSimBytes)
 	logger.Debugf("Exiting CreateMarble()")
 	return tx, nil
 }
@@ -179,6 +179,6 @@ func (marbleApp *MarbleApp) TransferMarble(args []string) (*common.Envelope, err
 	if pubSimBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
 		return nil, err
 	}
-	tx := constructTransaction(pubSimBytes)
+	tx := constructTransaction(marbleApp.name, pubSimBytes)
 	return tx, nil
 }

@@ -45,6 +45,7 @@ type PeerLedgerSupport interface {
 	GetPvtDataByNum(blockNum uint64, filter ledger.PvtNsCollFilter) ([]*ledger.TxPvtData, error)
 
 	CommitWithPvtData(blockAndPvtdata *ledger.BlockAndPvtData) error
+	CommitWithPvtDataByNo(seqNum uint64) error
 
 	GetBlockchainInfo() (*common.BlockchainInfo, error)
 
@@ -102,7 +103,7 @@ func (lc *LedgerCommitter) CommitWithPvtData(blockAndPvtData *ledger.BlockAndPvt
 	}
 
 	// Committing new block
-	if err := lc.PeerLedgerSupport.CommitWithPvtData(blockAndPvtData); err != nil {
+	if err := lc.PeerLedgerSupport.CommitWithPvtDataByNo(blockAndPvtData.Block.Header.Number); err != nil {
 		return err
 	}
 
