@@ -138,8 +138,7 @@ func serve(args []string) error {
 		panic("Unsupported msp type " + msp.ProviderTypeToString(mspType))
 	}
 
-	fmt.Println("Starting grpc client to", storageserver)
-	grpcmocks.StartClients(storageserver)
+	grpcmocks.StartClient(storageserver)
 
 	// set the logging level for specific modules defined via environment
 	// variables or core.yaml

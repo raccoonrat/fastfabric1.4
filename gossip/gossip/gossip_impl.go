@@ -1065,7 +1065,7 @@ func (sa *discoverySecurityAdapter) validateAliveMsgSignature(m *proto.SignedGos
 	am := m.GetAliveMsg()
 	// At this point we got the certificate of the peer, proceed to verifying the AliveMessage
 	verifier := func(peerIdentity []byte, signature, message []byte) error {
-		 _,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:message, Signature:signature, Creator:peerIdentity})
+		_, err := grpcmocks.CryptoClientMock{}.Verify(context.Background(), &grpcmocks.Transaction{Data: message, Signature: signature, Creator: peerIdentity})
 
 		return err
 	}
@@ -1213,7 +1213,7 @@ func (g *gossipServiceImpl) validateLeadershipMessage(msg *proto.SignedGossipMes
 		return errors.Wrap(err, "Unable to fetch PKI-ID from id-mapper")
 	}
 	return msg.Verify(identity, func(peerIdentity []byte, signature, message []byte) error {
-		_,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:message, Signature:signature, Creator:peerIdentity})
+		_, err := grpcmocks.CryptoClientMock{}.Verify(context.Background(), &grpcmocks.Transaction{Data: message, Signature: signature, Creator: peerIdentity})
 
 		return err
 	})

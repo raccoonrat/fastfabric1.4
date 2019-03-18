@@ -7,12 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package example
 
 import (
-	"context"
-	"github.com/fabric_extension/block_cache"
-	"github.com/fabric_extension/grpcmocks"
 	"github.com/hyperledger/fabric/core/ledger"
-
-	"github.com/hyperledger/fabric/protos/common"
 )
 
 // Committer a toy committer
@@ -31,7 +26,5 @@ func (c *Committer) Commit(blockNo uint64) error {
 	if err != nil {
 		return err
 	}
-
-	go grpcmocks.StClient.Store(context.Background(), func()*common.Block{b,_:=blocks.Cache.Get(blockNo); return b.Rawblock}())
 	return nil
 }

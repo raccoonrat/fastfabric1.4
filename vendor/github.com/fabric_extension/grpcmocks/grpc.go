@@ -10,9 +10,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var CrClient CryptoClientMock
-var StClient StorageClient
-
 type CryptoClientMock struct {
 	client *CryptoClient
 }
@@ -21,7 +18,7 @@ type StorageClientMock struct {
 	client *StorageClient
 }
 
-func (c* CryptoClientMock) Verify(ctx context.Context, tx *Transaction)(*Result, error){
+func (c CryptoClientMock) Verify(ctx context.Context, tx *Transaction) (*Result, error) {
 	mspObj := mspmgmt.GetIdentityDeserializer(tx.ChainID)
 	if mspObj == nil {
 		return nil, errors.Errorf("could not get msp for channel [%s]", tx.ChainID)
@@ -40,7 +37,6 @@ func (c* CryptoClientMock) Verify(ctx context.Context, tx *Transaction)(*Result,
 		return nil, errors.WithMessage(err, "creator certificate is not valid")
 	}
 
-
 	// validate the signature
 	err = creator.Verify(tx.Data, tx.Signature)
 	if err != nil {
@@ -50,8 +46,7 @@ func (c* CryptoClientMock) Verify(ctx context.Context, tx *Transaction)(*Result,
 	return &Result{}, nil
 }
 
-func (c* CryptoClientMock) CompareHash(ctx context.Context, in *CompareMessage, opts ...grpc.CallOption) (*Result, error) {
-
+func (c CryptoClientMock) CompareHash(ctx context.Context, in *CompareMessage, opts ...grpc.CallOption) (*Result, error) {
 
 	// build the original header by stitching together
 	// the common ChannelHeader and the per-action SignatureHeader
@@ -72,16 +67,10 @@ func (c* CryptoClientMock) CompareHash(ctx context.Context, in *CompareMessage, 
 
 var conn grpc.ClientConn
 
-func StartClients(address string) {
+func StartClient(address string) StorageClient {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		panic(err)
 	}
-	cr := NewCryptoClient(conn)
-	StClient = NewStorageClient(conn)
-	CrClient = CryptoClientMock{client:&cr}
-}
-
-func StopClient() {
-	conn.Close()
+	return NewStorageClient(conn)
 }

@@ -7,11 +7,8 @@ SPDX-License-Identifier: Apache-2.0
 package kvledger
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"github.com/fabric_extension/block_cache"
-	"github.com/fabric_extension/grpcmocks"
 	"sync"
 
 	"github.com/hyperledger/fabric/core/ledger/pvtdatapolicy"
@@ -280,15 +277,12 @@ func (l *kvLedger) CommitWithPvtDataByNo(blockNo uint64) error {
 	//	}
 	//}
 
-	go grpcmocks.StClient.Store(context.Background(), func()*common.Block{b,_:=blocks.Cache.Get(blockNo); return b.Rawblock}())
-
 	return nil
 }
 
 // CommitWithPvtData commits the block and the corresponding pvt data in an atomic operation
 func (l *kvLedger) CommitWithPvtData(pvtdataAndBlock *ledger.BlockAndPvtData) error {
 	var err error
-	//block := pvtdataAndBlock.Block
 	blockNo := pvtdataAndBlock.Block.Header.Number
 
 	logger.Debugf("Channel [%s]: Validating state for block [%d]", l.ledgerID, blockNo)
@@ -298,6 +292,8 @@ func (l *kvLedger) CommitWithPvtData(pvtdataAndBlock *ledger.BlockAndPvtData) er
 	}
 
 	logger.Debugf("Channel [%s]: Committing block [%d] to storage", l.ledgerID, blockNo)
+
+	//Private data was beyond the scope of FastFabric
 
 	//l.blockAPIsRWLock.Lock()
 	//defer l.blockAPIsRWLock.Unlock()

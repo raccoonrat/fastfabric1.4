@@ -4,12 +4,12 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fabric_extension/experiment"
+	"github.com/fabric_extension/util"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/example"
 	"log"
 	"os"
 	"os/user"
 	"runtime/pprof"
-	"github.com/fabric_extension/util"
 )
 
 var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
@@ -24,8 +24,8 @@ func main() {
 
 	params := experiment.ExperimentParams{
 		BlockParams: []experiment.BlockParams{{100, 1000}},
-		GrpcAddress: fmt.Sprint(*server,":",*port),
-		ChannelId: "test-system-channel-name"}
+		GrpcAddress: fmt.Sprint(*server, ":", *port),
+		ChannelId:   "test"}
 
 	if file, ok := isCpuProfiling(); ok {
 		fmt.Println("Start profiling")
@@ -35,6 +35,16 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	//	params.ThreadParams = make([]example.ThreadParams, 0, 49*49)
+	//	for i := 1; i < 50; i++ {
+	//		for j := 1; j < 50; j++ {
+	//			params.ThreadParams = append(params.ThreadParams,
+	//				example.ThreadParams{
+	//					BlockPipeline: i,
+	//					TxPipeline:    j})
+	//		}
+	//	}
+	//
 	params.ThreadParams = []experiment.ThreadParams{{31, 25}}
 	experiment.Current = params
 	example.Start(params)
@@ -48,15 +58,15 @@ func main() {
 	if file, ok := isThreadProfiling(); ok {
 		defer fmt.Println("Writing thread profile")
 		defer file.Close()
-		pprof.Lookup("threadcreate").WriteTo(file,1)
+		pprof.Lookup("threadcreate").WriteTo(file, 1)
 	}
 	if file, ok := isGRProfiling(); ok {
 		defer fmt.Println("Writing goroutine profile")
 		defer file.Close()
-		pprof.Lookup("goroutine").WriteTo(file,1)
+		pprof.Lookup("goroutine").WriteTo(file, 1)
 	}
 }
-func isThreadProfiling()(*os.File, bool) {
+func isThreadProfiling() (*os.File, bool) {
 	if *threadprofile == "" {
 		return nil, false
 	}

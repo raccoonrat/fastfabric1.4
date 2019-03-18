@@ -48,6 +48,5 @@ func (c *Consenter) ConstructBlock(transactions ...*common.Envelope) *common.Blo
 	block.Header.DataHash = block.Data.Hash()
 	c.blockNum++
 	c.previousHash = block.Header.Hash()
-
 	return block
 }

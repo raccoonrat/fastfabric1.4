@@ -655,7 +655,7 @@ cleanup := configtest.SetDevFabricConfigPath(t)
 
     numOfOrderer := 1
     // numOfChannels := 1
-    
+
     // Initialization shared by all orderers
     conf, err := localconfig.Load()
     if err != nil {
@@ -670,13 +670,13 @@ cleanup := configtest.SetDevFabricConfigPath(t)
     // Load sample channel profile
     // channelProfile := genesisconfig.Load(ChannelProfile)
 
-   
+
     // Generate a random system channel id for each test run,
     // so it does not recover ledgers from previous run.
     systemchannel := "system-channel-" + perf.RandomID(5)
     conf.General.SystemChannel = systemchannel
 
-    
+
     // Spawn orderers
     for i := 0; i < numOfOrderer; i++ {
         // If we are using json or file ledger, we should use temp dir for ledger location
@@ -708,7 +708,7 @@ cleanup := configtest.SetDevFabricConfigPath(t)
     // perf.OrdererExecWithArgs(perf.WaitForChannels, systemchannel)
 
     // Create channels
-    
+
     fmt.Printf("Sleeping.. ")
     for {
 

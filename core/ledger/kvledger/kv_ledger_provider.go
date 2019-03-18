@@ -187,8 +187,10 @@ func (provider *Provider) Close() {
 // state. Recovery checks if the ledger was created and the genesis block was committed successfully then it completes
 // the last step of adding the ledger id to the list of created ledgers. Else, it clears the under construction flag
 func (provider *Provider) recoverUnderConstructionLedger() {
-	//Recovery was beyond the scope of FastFabric
+	//Recovery was beyond the scope of the FastFabric paper
 	return
+
+
 	logger.Debugf("Recovering under construction ledger")
 	ledgerID, err := provider.idStore.getUnderConstructionFlag()
 	panicOnErr(err, "Error while checking whether the under construction flag is set")

@@ -937,7 +937,7 @@ func (vscc *ValidatorOneValidSignature) ValidateLSCCInvocationByNo(blockNo uint6
 			// here is the same as the one on disk?
 			// PROS: we prevent attacks where the policy is replaced
 			// CONS: this would be a point of non-determinism
-			err := vscc.checkInstantiationPolicy(chid, env, pol, payl)
+			err := vscc.checkInstantiationPolicy(chid,env , pol, payl)
 			if err != nil {
 				return err
 			}

@@ -156,8 +156,9 @@ func ArrayToChaincodeArgs(args []string) [][]byte {
 	return bargs
 }
 
-// Changed for benchmarking purposes, should not be changed in production
-const testchainid = "test-system-channel-name"
+//This is a hack and should not be changed in production
+//const testchainid = "testchainid"
+const testchainid = "test"
 const testorgid = "**TEST_ORGID**"
 
 //GetTestChainID returns the CHAINID constant in use by orderer

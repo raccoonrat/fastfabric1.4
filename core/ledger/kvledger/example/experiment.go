@@ -49,7 +49,7 @@ var validator *txvalidator.TxValidator
 
 var usr *user.User
 
-type InitParams struct{
+type InitParams struct {
 	Id       string
 	GenBlock *common.Block
 	Ledger   ledger.PeerLedger
@@ -65,12 +65,12 @@ func Start(params exp.ExperimentParams) {
 		fabric_extension.ThreadsPerBlock = tp.TxPipeline
 		var err error
 		validator, err = val.Init(initParams.Id, initParams.GenBlock, initParams.Ledger)
-		handleError(err,true)
+		handleError(err, true)
 
 		fmt.Println("==============================================")
 		fmt.Printf(
-			"Current block pipeline width: %d\n" +
-			"Current transaction pipeline width: %d\n", tp.BlockPipeline, tp.TxPipeline)
+			"Current block pipeline width: %d\n"+
+				"Current transaction pipeline width: %d\n", tp.BlockPipeline, tp.TxPipeline)
 
 		for _, bp := range params.BlockParams {
 			fmt.Println("-------------------")
@@ -81,6 +81,8 @@ func Start(params exp.ExperimentParams) {
 	ledgermgmt.Close()
 }
 
+var storage grpcmocks.StorageClient
+
 func initialize(params exp.ExperimentParams) {
 	var err error
 	usr, err = user.Current()
@@ -88,13 +90,12 @@ func initialize(params exp.ExperimentParams) {
 		log.Fatal(err)
 	}
 
-	grpcmocks.StartClients(params.GrpcAddress)
+	storage = grpcmocks.StartClient(params.GrpcAddress)
 
 	//call a helper method to load the core.yaml
 	testutil.SetupCoreYAMLConfig()
 
 	ledgermgmt.InitializeTestEnv()
-
 
 	gb, _ := configtxtest.MakeGenesisBlock(params.ChannelId)
 	blocks.Cache.Put(gb)
@@ -102,8 +103,7 @@ func initialize(params exp.ExperimentParams) {
 	handleError(err, true)
 
 	app = ConstructAppInstance(peerLedger)
-	initParams = InitParams{params.ChannelId,gb,peerLedger}
-
+	initParams = InitParams{params.ChannelId, gb, peerLedger}
 
 	crypto.SetChainID(params.ChannelId)
 
@@ -154,9 +154,9 @@ func initApp(params exp.BlockParams) {
 		handleError(err, true)
 		envs = append(envs, env)
 
-		b,err :=proto.Marshal(env)
+		b, err := proto.Marshal(env)
 
-		output= append(output,b)
+		output = append(output, b)
 	}
 
 	rawBlock := consenter.ConstructBlock(envs...)
@@ -175,7 +175,7 @@ func initApp(params exp.BlockParams) {
 func assertSetup(params exp.BlockParams) {
 	balances := QueryBalances(params)
 	if len(balances) != 2*params.BlockSize*params.Repetitions {
-		log.Fatal("Not all accounts setup. Expected",2*params.BlockSize*params.Repetitions, ", actual", len(balances) )
+		log.Fatal("Not all accounts setup. Expected", 2*params.BlockSize*params.Repetitions, ", actual", len(balances))
 	}
 	for i, balance := range balances {
 		if balance != 1 {
@@ -219,12 +219,12 @@ func prepareExperimentBlocks(params exp.BlockParams) []*common.Block {
 		}(i)
 	}
 	w.Wait()
-	sort.Slice(bs, func(i,j int)bool{return bs[i].Header.Number < bs[j].Header.Number})
+	sort.Slice(bs, func(i, j int) bool { return bs[i].Header.Number < bs[j].Header.Number })
 	return bs
 }
 func createExperimentBlock(blockSize int, offset int) *common.Block {
 	txs := make([]*common.Envelope, 0, blockSize)
-	output := make([][]byte,blockSize)
+	output := make([][]byte, blockSize)
 	for i := 0; i+1 < 2*blockSize; i += 2 {
 		tx, err := app.TransferFunds(
 			fmt.Sprint("account", offset+i),
@@ -232,9 +232,9 @@ func createExperimentBlock(blockSize int, offset int) *common.Block {
 			1)
 		handleError(err, true)
 		txs = append(txs, tx)
-		b,err :=proto.Marshal(tx)
+		b, err := proto.Marshal(tx)
 
-		output[i/2]=b
+		output[i/2] = b
 	}
 
 	dumpTxs(output, "tx_dump.log")
@@ -247,8 +247,8 @@ func dumpTxs(txs [][]byte, filename string) {
 	defer dumpFile.Close()
 	writer := bufio.NewWriter(dumpFile)
 	defer writer.Flush()
-	envs := &grpcmocks.Envelopes{Envs:txs}
-	b,err :=proto.Marshal(envs)
+	envs := &grpcmocks.Envelopes{Envs: txs}
+	b, err := proto.Marshal(envs)
 	handleError(err, true)
 	writer.Write(b)
 
@@ -257,8 +257,8 @@ func dumpTxs(txs [][]byte, filename string) {
 func CommitAllBlocks(bs []*common.Block) {
 	fmt.Println("Last block no:", bs[len(bs)-1].Header.Number)
 
-	finalized :=make(chan bool, len(blocks.Cache))
-	for i:=0; i<len(blocks.Cache);i++{
+	finalized := make(chan bool, len(blocks.Cache))
+	for i := 0; i < len(blocks.Cache); i++ {
 		finalized <- true
 	}
 
@@ -286,7 +286,9 @@ func CommitAllBlocks(bs []*common.Block) {
 		var err error
 		// act as committing peer to commit the Raw Block
 		err = committer.Commit(blockNo)
-		finalized <-true
+		b, _ := blocks.Cache.Get(blockNo)
+		go storage.Store(context.Background(), b.Rawblock)
+		finalized <- true
 		handleError(err, true)
 		i++
 	}
@@ -308,14 +310,14 @@ func cache(bs []*common.Block, finalized chan bool) chan uint64 {
 }
 
 func validate(cache <-chan uint64) <-chan uint64 {
-	preValidated :=make(chan uint64,len(cache))
+	preValidated := make(chan uint64, len(cache))
 	go func() {
 
 		var weight int64
-		if fabric_extension.PipelineWidth/2<1{
+		if fabric_extension.PipelineWidth/2 < 1 {
 			weight = 1
-		}else{
-			weight = int64(fabric_extension.PipelineWidth/2)
+		} else {
+			weight = int64(fabric_extension.PipelineWidth / 2)
 		}
 		weighted := semaphore.NewWeighted(weight)
 		msc := crypto.GetService()
@@ -331,13 +333,13 @@ func validate(cache <-chan uint64) <-chan uint64 {
 	}()
 	fmt.Println("Prevalidation started")
 
-	output := make(chan uint64,len(cache))
+	output := make(chan uint64, len(cache))
 	go func() {
 		var weight int64
-		if fabric_extension.PipelineWidth/2<1{
+		if fabric_extension.PipelineWidth/2 < 1 {
 			weight = 1
-		}else{
-			weight = int64(fabric_extension.PipelineWidth/2)
+		} else {
+			weight = int64(fabric_extension.PipelineWidth / 2)
 		}
 		weighted := semaphore.NewWeighted(weight)
 		wg := &sync.WaitGroup{}
@@ -359,17 +361,17 @@ func preValidate(msc *crypto.MspMessageCryptoService, blockNo uint64, preValidat
 	defer w.Release(1)
 	if err := msc.VerifyBlockByNo(blockNo); err == nil {
 		preValidated <- blockNo
-	}else{
+	} else {
 		fmt.Println("Prevalidation for block", blockNo, "failed:", err)
 	}
 }
 
-func validateBlock( blockNo uint64, weighted *semaphore.Weighted, output chan uint64, wg *sync.WaitGroup) {
-		defer wg.Done()
-		defer weighted.Release(1)
-		err := validator.ValidateByNo(blockNo)
-		handleError(err, true)
-		output <-blockNo
+func validateBlock(blockNo uint64, weighted *semaphore.Weighted, output chan uint64, wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer weighted.Release(1)
+	err := validator.ValidateByNo(blockNo)
+	handleError(err, true)
+	output <- blockNo
 }
 
 func handleError(err error, quit bool) {

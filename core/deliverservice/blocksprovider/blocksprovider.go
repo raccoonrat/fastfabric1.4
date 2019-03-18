@@ -8,7 +8,6 @@ package blocksprovider
 
 import (
 	"context"
-	"fmt"
 	"github.com/fabric_extension"
 	"github.com/fabric_extension/block_cache"
 	"github.com/fabric_extension/commit"
@@ -203,18 +202,19 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 	close(commit.GetSequence())
 }
 func (b *blocksProviderImpl) gossipBlock(block *common.Block) {
-
+	numberOfPeers := len(b.gossip.PeersOfChannel(gossipcommon.ChainID(b.chainID)))
 	marshaledBlock, err := proto.Marshal(block)
 	seqNum := block.Header.Number
 	if err != nil {
 		logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID, seqNum, err)
 		return
 	}
-	numberOfPeers := len(b.gossip.PeersOfChannel(gossipcommon.ChainID(b.chainID)))
 	// Create payload with a block received
 	payload := createPayload(seqNum, marshaledBlock)
 	// Use payload to create gossip message
 	gossipMsg := createGossipMsg(b.chainID, payload)
+
+
 
 	// Gossip messages with other nodes
 	logger.Debugf("[%s] Gossiping block [%d], peers number [%d]", b.chainID, seqNum, numberOfPeers)
@@ -227,7 +227,6 @@ func (b *blocksProviderImpl) receive(messages chan *orderer.DeliverResponse) {
 	defer close(messages)
 	for !b.isDone() {
 		msg, err := b.client.Recv()
-		fmt.Println("Block received")
 		if err != nil {
 			logger.Warningf("[%s] Receive error: %s", b.chainID, err.Error())
 			return

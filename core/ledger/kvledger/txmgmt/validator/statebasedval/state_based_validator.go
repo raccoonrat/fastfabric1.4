@@ -6,6 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 package statebasedval
 
 import (
+	"fmt"
 	"github.com/fabric_extension/block_cache"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
@@ -89,7 +90,7 @@ func (v *Validator) preLoadCommittedVersionOfRSet(block *valinternal.Block) erro
 }
 
 func (v *Validator) preLoadCommittedVersionOfRSetByNo(blockNo uint64) error {
-	block, _:=blocks.Cache.Get(blockNo)
+	block, _ := blocks.Cache.Get(blockNo)
 
 	// Collect both public and hashed keys in read sets of all transactions in a given block
 	var pubKeys []*statedb.CompositeKey
@@ -104,7 +105,7 @@ func (v *Validator) preLoadCommittedVersionOfRSetByNo(blockNo uint64) error {
 	hashedKeysMap := make(map[privacyenabledstate.HashedCompositeKey]interface{})
 
 	for _, tx := range block.Txs {
-		rwSet, _ :=tx.GetActions()[0].GetRwSet()
+		rwSet, _ := tx.GetActions()[0].GetRwSet()
 		for _, nsRWSet := range rwSet.NsRwSets {
 			for _, kvRead := range nsRWSet.KvRwSet.Reads {
 				compositeKey := statedb.CompositeKey{
@@ -188,14 +189,14 @@ func (v *Validator) ValidateAndPrepareBatchByNo(blockNo uint64, doMVCCValidation
 		}
 	}
 
-	block,_:= blocks.Cache.Get(blockNo)
+	block, _ := blocks.Cache.Get(blockNo)
 	txsFilter := util.TxValidationFlags(block.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 
 	updates := valinternal.NewPubAndHashUpdates()
 	for idx, tx := range block.Txs {
 		var validationCode peer.TxValidationCode
 		var err error
-		rwset,_:= tx.GetActions()[0].GetRwSet()
+		rwset, _ := tx.GetActions()[0].GetRwSet()
 		if validationCode, err = v.validateEndorserTX(rwset, doMVCCValidation, updates); err != nil {
 			return nil, err
 		}

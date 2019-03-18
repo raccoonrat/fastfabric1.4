@@ -22,6 +22,7 @@ import (
 	"github.com/fabric_extension/grpcmocks"
 
 	"errors"
+
 	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/msp"
 	"github.com/hyperledger/fabric/msp/mgmt"
@@ -150,7 +151,7 @@ func (p *policyChecker) CheckPolicyNoChannel(policyName string, signedProp *pb.S
 	}
 
 	// Verify the signature
-	_,err = grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:signedProp.ProposalBytes, Signature:signedProp.Signature, Creator:shdr.Creator})
+	_, err = grpcmocks.CryptoClientMock{}.Verify(context.Background(), &grpcmocks.Transaction{Data: signedProp.ProposalBytes, Signature: signedProp.Signature, Creator: shdr.Creator})
 	return err
 }
 

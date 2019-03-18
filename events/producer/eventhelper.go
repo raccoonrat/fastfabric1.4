@@ -29,6 +29,7 @@ func CreateBlockEvents(block *common.Block) (bevent *pb.Event, fbevent *pb.Event
 	blockForEvent.Data = &common.BlockData{}
 	txsFltr := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 
+
 	b,_ := blocks.Cache.Get(block.Header.Number)
 
 	for txIndex, d := range b.Txs {

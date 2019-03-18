@@ -176,7 +176,7 @@ func (is *identityMapperImpl) Stop() {
 
 // Verify verifies a signed message
 func (is *identityMapperImpl) Verify(vkID, signature, message []byte) error {
-	_,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data:message, Signature:signature, Creator:vkID})
+	_, err := grpcmocks.CryptoClientMock{}.Verify(context.Background(), &grpcmocks.Transaction{Data: message, Signature: signature, Creator: vkID})
 
 	return err
 }

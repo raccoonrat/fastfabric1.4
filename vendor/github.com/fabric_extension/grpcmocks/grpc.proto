@@ -11,6 +11,10 @@ service Crypto {
 
 service Storage {
     rpc Store(common.Block) returns (Result) {    }
+    rpc CreateLedger(common.Block) returns (Result) {    }
+    rpc Init(EndorseInit) returns (common.Envelope){}
+    rpc Endorse(Transfer) returns (common.Envelope){}
+    rpc QueryBalances(Accounts) returns (Balances){}
 }
 
 message Transaction {
@@ -18,7 +22,6 @@ message Transaction {
     bytes Data = 2;
     bytes Signature = 3;
     string ChainID = 4;
-
 }
 
 message Result {
@@ -33,4 +36,22 @@ message CompareMessage{
 
 message Envelopes{
     repeated bytes Envs=1;
+}
+
+message EndorseInit{
+    map<string,int32> initBalances = 1;
+}
+
+message Transfer{
+    string from=1;
+    string to=2;
+    int32 amount=3;
+}
+
+message Accounts{
+    repeated string accs=1;
+}
+
+message Balances{
+    repeated int32 bal=1;
 }

@@ -215,7 +215,7 @@ func (h *handler) validateEventMessage(signedEvt *pb.SignedEvent) (*pb.Event, er
 	}
 
 	// Verify the signature
-	_,err = grpcmocks.CrClient.Verify(context.Background(),&grpcmocks.Transaction{Data:signedEvt.EventBytes, Signature:signedEvt.Signature,Creator:evt.Creator})
+	_, err = grpcmocks.CryptoClientMock{}.Verify(context.Background(), &grpcmocks.Transaction{Data: signedEvt.EventBytes, Signature: signedEvt.Signature, Creator: evt.Creator})
 	if err != nil {
 		return nil, fmt.Errorf("failed verifying the event signature: %s", err)
 	}

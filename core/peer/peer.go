@@ -215,6 +215,8 @@ func Initialize(init func(string), ccp ccprovider.ChaincodeProvider, sccp sysccp
 			peerLogger.Debugf("Error while loading ledger %s with message %s. We continue to the next ledger rather than abort.", cid, err)
 			continue
 		}
+
+		//This is a hack and should not be commented out in production
 		//if cb, err = getCurrConfigBlockFromLedger(ledger); err != nil {
 		//	peerLogger.Warningf("Failed to find config block on ledger %s(%s)", cid, err)
 		//	peerLogger.Debugf("Error while looking for config block on ledger %s with message %s. We continue to the next ledger rather than abort.", cid, err)
@@ -276,12 +278,12 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 		return err
 	}
 
-	//FastFabric did not deal with configuration, so this is a hack to get the chain going
-
+	//This is a hack and should not be done in a production setting!
 	cb, _ = configtxtest.MakeGenesisBlock("testchainid")
 	blocks.Cache.Put(cb)
 	var bundle *channelconfig.Bundle
 	cid = "test"
+	// end of hack
 
 	if chanConf != nil {
 		bundle, err = channelconfig.NewBundle(cid, chanConf)

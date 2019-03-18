@@ -151,7 +151,7 @@ func (txmgr *LockBasedTxMgr) Shutdown() {
 
 // Commit implements method in interface `txmgmt.TxMgr`
 func (txmgr *LockBasedTxMgr) Commit() error {
-	//Private data was out of scope for Fast Fabric, so we removed the pvtdataPurgerMgr steps
+	//Dealing with private data was beyond the scope of FastFabric, so the purge manager is taken out
 
 	// When using the purge manager for the first block commit after peer start, the asynchronous function
 	// 'PrepareForExpiringKeys' is invoked in-line. However, for the subsequent blocks commits, this function is invoked

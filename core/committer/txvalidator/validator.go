@@ -120,6 +120,106 @@ func (v *TxValidator) chainExists(chain string) bool {
 	return true
 }
 
+func (v *TxValidator) ValidateByNo(blockNo uint64) error {
+	var err error
+	var errPos int
+
+	logger.Debug("START Block Validation")
+	defer logger.Debug("END Block Validation")
+
+	block, err := blocks.Cache.Get(blockNo);
+	if err != nil{
+		panic(err)
+	}
+	txCount := len(block.Txs)
+
+	// Initialize trans as valid here, then set invalidation reason code upon invalidation below
+	txsfltr := ledgerUtil.NewTxValidationFlags(txCount)
+	// txsChaincodeNames records all the invoked chaincodes by tx in a block
+	txsChaincodeNames := make(map[int]*sysccprovider.ChaincodeInstance)
+	// upgradedChaincodes records all the chaincodes that are upgraded in a block
+	txsUpgradedChaincodes := make(map[int]*sysccprovider.ChaincodeInstance)
+	// array of txids
+	txidArray := make([]string, txCount)
+
+	results := make(chan *blockValidationResult, txCount)
+	for tIdx := range block.Txs {
+		// ensure that we don't have too many concurrent validation workers
+
+		v.Support.Acquire(context.Background(), 1)
+		tIdx := tIdx
+		go func() {
+			defer v.Support.Release(1)
+
+			v.validateTx(blockNo,tIdx, results)
+		}()
+	}
+
+	// now we read responses in the order in which they come back
+	for i := 0; i < txCount; i++ {
+		res := <-results
+
+		if res.err != nil {
+			// if there is an error, we buffer its value, wait for
+			// all workers to complete validation and then return
+			// the error from the first tx in this block that returned an error
+			logger.Debugf("got terminal error %s for idx %d", res.err, res.tIdx)
+
+			if err == nil || res.tIdx < errPos {
+				err = res.err
+				errPos = res.tIdx
+			}
+		} else {
+			// if there was no error, we set the txsfltr and we set the
+			// txsChaincodeNames and txsUpgradedChaincodes maps
+			logger.Debugf("got result for idx %d, code %d", res.tIdx, res.validationCode)
+
+			txsfltr.SetFlag(res.tIdx, res.validationCode)
+
+			if res.validationCode == peer.TxValidationCode_VALID {
+				if res.txsChaincodeName != nil {
+					txsChaincodeNames[res.tIdx] = res.txsChaincodeName
+				}
+				if res.txsUpgradedChaincode != nil {
+					txsUpgradedChaincodes[res.tIdx] = res.txsUpgradedChaincode
+				}
+				txidArray[res.tIdx] = res.txid
+			}
+		}
+	}
+
+	// if we're here, all workers have completed the validation.
+	// If there was an error we return the error from the first
+	// tx in this block that returned an error
+	if err != nil {
+		return err
+	}
+
+	// if we operate with this capability, we mark invalid any transaction that has a txid
+	// which is equal to that of a previous tx in this block
+	if v.Support.Capabilities().ForbidDuplicateTXIdInBlock() {
+		markTXIdDuplicates(txidArray, txsfltr)
+	}
+
+	// if we're here, all workers have completed validation and
+	// no error was reported; we set the tx filter and return
+	// success
+	v.invalidTXsForUpgradeCC(txsChaincodeNames, txsUpgradedChaincodes, txsfltr)
+
+	// make sure no transaction has skipped validation
+	err = v.allValidated(txsfltr, blockNo)
+	if err != nil {
+		return err
+	}
+
+	// Initialize metadata structure
+	utils.InitBlockMetadata(block.Rawblock)
+
+	block.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsfltr
+
+	return nil
+}
+
 // Validate performs the validation of a block. The validation
 // of each transaction in the block is performed in parallel.
 // The approach is as follows: the committer thread starts the
@@ -245,115 +345,6 @@ func (v *TxValidator) Validate(block *common.Block) error {
 	//utils.InitBlockMetadata(umb.Rawblock)
 	//
 	//umb.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsfltr
-
-	return nil
-}
-
-
-
-
-
-
-func (v *TxValidator) ValidateByNo(blockNo uint64) error {
-	var err error
-	var errPos int
-
-	logger.Debug("START Block Validation")
-	defer logger.Debug("END Block Validation")
-
-	block, err := blocks.Cache.Get(blockNo);
-	if err != nil{
-		panic(err)
-	}
-	txCount := len(block.Txs)
-
-	// Initialize trans as valid here, then set invalidation reason code upon invalidation below
-	txsfltr := ledgerUtil.NewTxValidationFlags(txCount)
-	// txsChaincodeNames records all the invoked chaincodes by tx in a block
-	txsChaincodeNames := make(map[int]*sysccprovider.ChaincodeInstance)
-	// upgradedChaincodes records all the chaincodes that are upgraded in a block
-	txsUpgradedChaincodes := make(map[int]*sysccprovider.ChaincodeInstance)
-	// array of txids
-	txidArray := make([]string, txCount)
-
-	results := make(chan *blockValidationResult, txCount)
-	for tIdx := range block.Txs {
-		// ensure that we don't have too many concurrent validation workers
-
-		v.Support.Acquire(context.Background(), 1)
-		tIdx := tIdx
-		go func() {
-			defer v.Support.Release(1)
-
-			v.validateTx(blockNo,tIdx, results)
-		}()
-	}
-
-	//logger.Debugf("expecting %d block validation responses", len(block.Data.Data))
-
-	// now we read responses in the order in which they come back
-	for i := 0; i < txCount; i++ {
-		res := <-results
-
-		if res.err != nil {
-			// if there is an error, we buffer its value, wait for
-			// all workers to complete validation and then return
-			// the error from the first tx in this block that returned an error
-			logger.Debugf("got terminal error %s for idx %d", res.err, res.tIdx)
-
-			if err == nil || res.tIdx < errPos {
-				err = res.err
-				errPos = res.tIdx
-			}
-
-			fmt.Printf("Error during validation: %v\n",err)
-		} else {
-			// if there was no error, we set the txsfltr and we set the
-			// txsChaincodeNames and txsUpgradedChaincodes maps
-			logger.Debugf("got result for idx %d, code %d", res.tIdx, res.validationCode)
-
-			txsfltr.SetFlag(res.tIdx, res.validationCode)
-
-			if res.validationCode == peer.TxValidationCode_VALID {
-				if res.txsChaincodeName != nil {
-					txsChaincodeNames[res.tIdx] = res.txsChaincodeName
-				}
-				if res.txsUpgradedChaincode != nil {
-					txsUpgradedChaincodes[res.tIdx] = res.txsUpgradedChaincode
-				}
-				txidArray[res.tIdx] = res.txid
-			}
-		}
-	}
-
-	// if we're here, all workers have completed the validation.
-	// If there was an error we return the error from the first
-	// tx in this block that returned an error
-	if err != nil {
-		return err
-	}
-
-	// if we operate with this capability, we mark invalid any transaction that has a txid
-	// which is equal to that of a previous tx in this block
-	if v.Support.Capabilities().ForbidDuplicateTXIdInBlock() {
-		markTXIdDuplicates(txidArray, txsfltr)
-	}
-
-	// if we're here, all workers have completed validation and
-	// no error was reported; we set the tx filter and return
-	// success
-	v.invalidTXsForUpgradeCC(txsChaincodeNames, txsUpgradedChaincodes, txsfltr)
-
-	// make sure no transaction has skipped validation
-	err = v.allValidated(txsfltr, blockNo)
-	if err != nil {
-		return err
-	}
-
-	// Initialize metadata structure
-	utils.InitBlockMetadata(block.Rawblock)
-
-	block.Rawblock.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsfltr
 
 	return nil
 }

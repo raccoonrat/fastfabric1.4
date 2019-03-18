@@ -18,6 +18,7 @@ package example
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -65,6 +66,32 @@ func (app *App) Init(initialBalances map[string]int) (*common.Envelope, error) {
 // TransferFunds simulates a transaction for transferring fund from fromAccount to toAccount
 func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt int) (*common.Envelope, error) {
 	// act as endorsing peer shim code to simulate a transaction on behalf of chaincode
+
+	var pubSimBytes []byte
+	var err error
+	for i := 0; i < 5; i++ {
+
+		var result *ledger.TxSimulationResults
+		result, err = app.executeTransfer(fromAccount, toAccount, transferAmt)
+		if err != nil {
+			continue
+		}
+
+		if pubSimBytes, err = result.GetPubSimulationBytes(); err != nil {
+			continue
+		}
+
+	}
+	if err != nil {
+		return nil, err
+	}
+	// act as endorsing peer to create an Action with the SimulationResults
+	// then act as SDK to create a Transaction with the EndorsedAction
+	tx := constructTransaction(app.name, pubSimBytes)
+	return tx, nil
+}
+
+func (app *App) executeTransfer(fromAccount string, toAccount string, transferAmt int) (*ledger.TxSimulationResults, error) {
 	var txSimulator ledger.TxSimulator
 	var err error
 	if txSimulator, err = app.ledger.NewTxSimulator(util.GenerateUUID()); err != nil {
@@ -77,6 +104,7 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 	}
 	balFrom := toInt(balFromBytes)
 	if balFrom-transferAmt < 0 {
+		time.Sleep(5 * time.Second)
 		return nil, fmt.Errorf("Not enough balance in account [%s]. Balance = [%d], transfer request = [%d]",
 			fromAccount, balFrom, transferAmt)
 	}
@@ -86,21 +114,10 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 		return nil, err
 	}
 	balTo := toInt(balToBytes)
-
 	txSimulator.SetState(app.name, fromAccount, toBytes(balFrom-transferAmt))
 	txSimulator.SetState(app.name, toAccount, toBytes(balTo+transferAmt))
-	var txSimulationResults *ledger.TxSimulationResults
-	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
-		return nil, err
-	}
-	var pubSimBytes []byte
-	if pubSimBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
-		return nil, err
-	}
-	// act as endorsing peer to create an Action with the SimulationResults
-	// then act as SDK to create a Transaction with the EndorsedAction
-	tx := constructTransaction(app.name, pubSimBytes)
-	return tx, nil
+
+	return txSimulator.GetTxSimulationResults()
 }
 
 // QueryBalances queries the balance funds

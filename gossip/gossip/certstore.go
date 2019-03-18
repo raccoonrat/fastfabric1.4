@@ -98,7 +98,7 @@ func (cs *certStore) validateIdentityMsg(msg *proto.SignedGossipMessage) error {
 	}
 
 	verifier := func(peerIdentity []byte, signature, message []byte) error {
-		_,err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Data: message, Signature:signature, Creator:peerIdentity})
+		_, err := grpcmocks.CryptoClientMock{}.Verify(context.Background(), &grpcmocks.Transaction{Data: message, Signature: signature, Creator: peerIdentity})
 
 		return err
 	}

@@ -7,34 +7,32 @@ import (
 	"flag"
 	"fmt"
 	"github.com/fabric_extension"
-	"github.com/fabric_extension/stopwatch"
-	"github.com/hyperledger/fabric/core/ledger/util"
-	"github.com/hyperledger/fabric/protos/common"
 	"github.com/fabric_extension/block_cache"
 	"github.com/fabric_extension/commit"
-	benchutil "github.com/fabric_extension/util"
 	"github.com/fabric_extension/experiment"
 	"github.com/fabric_extension/grpcmocks"
+	"github.com/fabric_extension/stopwatch"
+	benchutil "github.com/fabric_extension/util"
+	val "github.com/fabric_extension/validator"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/committer/txvalidator"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/example"
 	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/core/ledger/testutil"
+	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/hyperledger/fabric/orderer/common/server"
+	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/orderer"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/op/go-logging"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/semaphore"
+	"log"
 	"math"
 	"os"
-	"github.com/hyperledger/fabric/protos/orderer"
-	val "github.com/fabric_extension/validator"
 	"os/signal"
-	"path/filepath"
 	"sync"
 
-	// "sync"
-	"os/user"
-	"time"
 	crypto2 "github.com/fabric_extension/crypto"
 	"github.com/hyperledger/fabric/common/crypto"
 	"github.com/hyperledger/fabric/common/localmsp"
@@ -43,68 +41,152 @@ import (
 	cb "github.com/hyperledger/fabric/protos/common"
 	ab "github.com/hyperledger/fabric/protos/orderer"
 	"github.com/hyperledger/fabric/protos/utils"
+	"os/user"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
 
-
 var (
-   oldest  = &ab.SeekPosition{Type: &ab.SeekPosition_Oldest{Oldest: &ab.SeekOldest{}}}
-    newest  = &ab.SeekPosition{Type: &ab.SeekPosition_Newest{Newest: &ab.SeekNewest{}}}
-    maxStop = &ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: math.MaxUint64}}}
-    //oldest = &ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: uint64(100)}}}
+	oldest  = &ab.SeekPosition{Type: &ab.SeekPosition_Oldest{Oldest: &ab.SeekOldest{}}}
+	newest  = &ab.SeekPosition{Type: &ab.SeekPosition_Newest{Newest: &ab.SeekNewest{}}}
+	maxStop = &ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: math.MaxUint64}}}
+	logger *logging.Logger // package-level logger
+
+	storageAddr string
+	endorseAddr server.ArrayFlags
+	channelID string
+	storage grpcmocks.StorageClient
 )
 
-type deliverClient struct {
-    client    ab.AtomicBroadcast_DeliverClient
-    channelID string
-    signer    crypto.LocalSigner
-    quiet     bool
+func main() {
+	logger = flogging.MustGetLogger("deliverclient")
+	server.SetDevFabricConfigPath()
+	conf, err := localconfig.Load()
+	if err != nil {
+		fmt.Println("failed to load config:", err)
+		os.Exit(1)
+	}
+
+	// Load local MSP
+	err = mspmgmt.LoadLocalMsp(conf.General.LocalMSPDir, conf.General.BCCSP, conf.General.LocalMSPID)
+	if err != nil { // Handle errors reading the config file
+		fmt.Println("Failed to initialize local MSP:", err)
+		os.Exit(0)
+	}
+
+	signer := localmsp.NewSigner()
+
+	var serverAddr string
+	var seek int
+	var quiet bool
+
+	flag.StringVar(&serverAddr, "server", fmt.Sprintf("%s:%d", conf.General.ListenAddress, conf.General.ListenPort), "The RPC server to connect to.")
+	flag.StringVar(&storageAddr, "storage", fmt.Sprintf("%s:%d", conf.General.ListenAddress, conf.General.ListenPort), "The storage RPC server to connect to.")
+	flag.Var(&endorseAddr, "endorse", "The endorse RPC server to connect to.")
+	flag.StringVar(&channelID, "channelID", localconfig.Defaults.General.SystemChannel, "The channel ID to deliver from.")
+	flag.BoolVar(&quiet, "quiet", true, "Only print the block number, will not attempt to print its block contents.")
+	flag.IntVar(&seek, "seek", -2, "Specify the range of requested blocks."+
+		"Acceptable values:"+
+		"-2 (or -1) to start from oldest (or newest) and keep at it indefinitely."+
+		"N >= 0 to fetch block N only.")
+	flag.Parse()
+
+	experiment.Current = experiment.ExperimentParams{ChannelId: channelID, GrpcAddress: storageAddr}
+
+	// user
+	usr, err := user.Current()
+	if err != nil {
+		fmt.Println("Error: ", err)
+	}
+	fmt.Println("seeking.. ", seek)
+
+	now := time.Now()
+	stopwatch.SetOutput("end2end", benchutil.OpenFile(fmt.Sprintf("%s/end2end.log", usr.HomeDir)))
+	stopwatch.SetOutput("deliver", benchutil.OpenFile(fmt.Sprintf("%s/deliver.log", usr.HomeDir)))
+
+	runDeliverClient(channelID, serverAddr, seek, quiet, signer)
+
+
+	fmt.Println("time taken:", time.Since(now))
+	fmt.Println("Done")
+
 }
 
-func newDeliverClient(client ab.AtomicBroadcast_DeliverClient, channelID string, signer crypto.LocalSigner, quiet bool) *deliverClient {
-    return &deliverClient{client: client, channelID: channelID, signer: signer, quiet: quiet}
+func initialize(block *common.Block) {
+	fmt.Println("Storage server address:", storageAddr)
+	storage = grpcmocks.StartClient(storageAddr)
+	fmt.Println("Endorser server address:", endorseAddr)
+	for _, addr := range endorseAddr {
+		end := grpcmocks.StartClient(addr)
+		server.Endorsers = append(server.Endorsers, end)
+		_, err := end.CreateLedger(context.Background(), block)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	_, err := storage.CreateLedger(context.Background(), block)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	blocks.Cache.Put(block)
+
+	//call a helper method to load the core.yaml
+	testutil.SetupCoreYAMLConfig()
+
+	ledgermgmt.InitializeTestEnv()
+
+	peerLedger, err := ledgermgmt.CreateLedger(block)
+	handleError(err, true)
+
+	crypto2.SetChainID(channelID)
+
+	handleError(err, true)
+
+	committer = example.ConstructCommitter(peerLedger)
+	validator, err = val.Init(channelID, block, peerLedger)
+
+	go sendOutput()
 }
 
-func (r *deliverClient) seekHelper(start *ab.SeekPosition, stop *ab.SeekPosition) *cb.Envelope {
-    env, err := utils.CreateSignedEnvelope(cb.HeaderType_DELIVER_SEEK_INFO, r.channelID, r.signer, &ab.SeekInfo{
-        Start:    start,
-        Stop:     stop,
-        Behavior: ab.SeekInfo_BLOCK_UNTIL_READY,
-    }, 0, 0)
-    if err != nil {
-        panic(err)
-    }
-    return env
+var output chan uint64
+func sendOutput() {
+	output = make(chan uint64, 100000)
+	for no := range output {
+		b, err := blocks.Cache.Get(no)
+		if err != nil {
+			fmt.Println("blockNo:", no)
+			panic(err)
+		}
+		storage.Store(context.Background(), b.Rawblock)
+		for _, en := range server.Endorsers {
+			en.Store(context.Background(), b.Rawblock)
+		}
+	}
 }
 
-func (r *deliverClient) seekOldest() error {
-    return r.client.Send(r.seekHelper(oldest, maxStop))
+var committer *example.Committer
+var validator *txvalidator.TxValidator
+
+func handleError(err error, quit bool) {
+	if err != nil {
+		if quit {
+			panic(fmt.Errorf("Error: %s\n", err))
+		} else {
+			fmt.Printf("Error: %s\n", err)
+		}
+	}
 }
 
-func (r *deliverClient) seekNewest() error {
-    return r.client.Send(r.seekHelper(newest, maxStop))
-}
+func runDeliverClient(channelID string,
+	serverAddr string,
+	seek int,
+	quiet bool,
+	signer crypto.LocalSigner) {
 
-func (r *deliverClient) seekSingle(blockNumber uint64) error {
-    specific := &ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: blockNumber}}}
-    return r.client.Send(r.seekHelper(specific, specific))
-}
-
-func runDeliverClient( channelID string,
-    serverAddr string,
-    seek int,
-    quiet bool,
-    goroutines uint64,
-    r uint64 ,
-    msgSize uint64,
-    messages uint64,
-    numBlocks uint64,
-    HomeDir string,
-    signer crypto.LocalSigner) {
-
-	fmt.Println("Running....", r)
+	fmt.Println("Running....")
 
 	if seek < -2 {
 		fmt.Println("Wrong seek value.")
@@ -139,10 +221,10 @@ func runDeliverClient( channelID string,
 	go s.receive(msgs)
 
 	var weight int64
-	if fabric_extension.PipelineWidth/2<1{
+	if fabric_extension.PipelineWidth/2 < 1 {
 		weight = 1
-	}else{
-		weight = int64(fabric_extension.PipelineWidth/2)
+	} else {
+		weight = int64(fabric_extension.PipelineWidth / 2)
 	}
 	weighted := semaphore.NewWeighted(weight)
 
@@ -154,12 +236,12 @@ func runDeliverClient( channelID string,
 	validated := commit.GetValidated()
 	go commitBlocks(sequence, validated)
 	go validate(verified, validated)
-	firstBlock:=true
+	firstBlock := true
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	go func(){
+	go func() {
 		for range c {
 			assertResult(blocksize, reps)
 			stopwatch.Flush()
@@ -175,7 +257,7 @@ func runDeliverClient( channelID string,
 		case *orderer.DeliverResponse_Block:
 			seqNum := t.Block.Header.Number
 			//fmt.Println("Block ", seqNum)
-			if seqNum ==0 {
+			if seqNum == 0 {
 				if !firstBlock {
 					fmt.Println("this should happen only once")
 				}
@@ -183,13 +265,10 @@ func runDeliverClient( channelID string,
 				t.Block.Metadata.Metadata[cb.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsFilter
 				initialize(t.Block)
 
-				//initApp(blocksize, reps)
-				//assertSetup(blocksize, reps)
-
 				firstBlock = false
-			}else {
+			} else {
 				blocks.Cache.Put(t.Block)
-				sequence <-seqNum
+				sequence <- seqNum
 
 				weighted.Acquire(context.Background(), 1)
 				go func(w *semaphore.Weighted) {
@@ -207,175 +286,38 @@ func runDeliverClient( channelID string,
 			return
 		}
 	}
-
 }
+
 func commitBlocks(sequence chan uint64, validated chan uint64) {
 	backlog := make(map[uint64]uint64, 1024)
 	var blockNo uint64
 	var ok bool
 	for nextToCommit := range sequence {
-		if blockNo, ok = backlog[nextToCommit & 1023]; !ok || blockNo != nextToCommit {
-			for bn := range validated{
+		if blockNo, ok = backlog[nextToCommit&1023]; !ok || blockNo != nextToCommit {
+			for bn := range validated {
 				if bn == nextToCommit {
 					blockNo = bn
 					break
 				}
-				backlog[bn & 1023] = bn
+				backlog[bn&1023] = bn
 			}
 		}
 
 		if err := committer.Commit(blockNo); err != nil {
 			logger.Panicf("Cannot commit block to the ledger due to %+v", errors.WithStack(err))
 		}
-
+		output <- blockNo
 		stopwatch.Now("end2end")
 	}
 }
-var logger *logging.Logger // package-level logger
 
-func main() {
-
-	logger = flogging.MustGetLogger("deliverclient")
-    SetDevFabricConfigPath()
-    conf, err := localconfig.Load()
-    if err != nil {
-        fmt.Println("failed to load config:", err)
-        os.Exit(1)
-    }
-
-    // Load local MSP
-    err = mspmgmt.LoadLocalMsp(conf.General.LocalMSPDir, conf.General.BCCSP, conf.General.LocalMSPID)
-    if err != nil { // Handle errors reading the config file
-        fmt.Println("Failed to initialize local MSP:", err)
-        os.Exit(0)
-    }
-
-    signer := localmsp.NewSigner()
-
-
-    var serverAddr string
-    var seek int
-    var quiet bool
-    var goroutines uint64
-    var numRuns uint64 
-    var msgSize uint64
-    var messages uint64
-    var numBlocks uint64
-
-
-    flag.StringVar(&serverAddr, "server", fmt.Sprintf("%s:%d", conf.General.ListenAddress, conf.General.ListenPort), "The RPC server to connect to.")
-	flag.StringVar(&storageAddr, "storage", fmt.Sprintf("%s:%d", conf.General.ListenAddress, conf.General.ListenPort), "The storage RPC server to connect to.")
-    flag.StringVar(&channelID, "channelID", localconfig.Defaults.General.SystemChannel, "The channel ID to deliver from.")
-    flag.BoolVar(&quiet, "quiet", true, "Only print the block number, will not attempt to print its block contents.")
-    flag.IntVar(&seek, "seek", -2, "Specify the range of requested blocks."+
-        "Acceptable values:"+
-        "-2 (or -1) to start from oldest (or newest) and keep at it indefinitely."+
-        "N >= 0 to fetch block N only.")
-    flag.Uint64Var(&goroutines, "goroutines", 2, "The number of concurrent go routines to broadcast the messages on")
-    flag.Uint64Var(&msgSize, "size", 1024, "Message size")
-    flag.Uint64Var(&messages, "messages", 10000, "#transactions")
-    flag.Uint64Var(&numRuns, "run", 1, "Run ")
-    flag.Parse()
-
-    experiment.Current = experiment.ExperimentParams{ChannelId:channelID, GrpcAddress:storageAddr}
-
-    numBlocks = 999
-    // user
-    usr, err := user.Current()
-    if err != nil {
-        fmt.Println("Error: ", err)
-    }
-    fmt.Println("seeking.. ", seek)
-
-    now := time.Now()
-	stopwatch.SetOutput("end2end", benchutil.OpenFile(fmt.Sprintf("%s/end2end.log", usr.HomeDir)))
-	stopwatch.SetOutput("deliver", benchutil.OpenFile(fmt.Sprintf("%s/deliver.log", usr.HomeDir)))
-
-
-    for r := uint64(0); r < numRuns; r++ {
-        
-        runDeliverClient(channelID,
-                serverAddr ,
-                seek ,
-                quiet ,
-                goroutines ,
-                r ,
-                msgSize ,
-                messages,
-                numBlocks,
-                usr.HomeDir,
-                signer)
-            
-    }
-
-    fmt.Println(numRuns, "time taken:", time.Since(now))
-    fmt.Println("Done")
-
-}
-
-var storageAddr string
-var channelID string
-
-func initialize(block *common.Block) {
-	grpcmocks.StartClients(storageAddr)
-	blocks.Cache.Put(block)
-
-	//call a helper method to load the core.yaml
-	testutil.SetupCoreYAMLConfig()
-
-	ledgermgmt.InitializeTestEnv()
-
-	peerLedger, err := ledgermgmt.CreateLedger(block)
-	handleError(err, true)
-
-	app = example.ConstructAppInstance(peerLedger)
-
-	crypto2.SetChainID(channelID)
-
-	handleError(err, true)
-
-	consenter = example.ConstructConsenter()
-	committer = example.ConstructCommitter(peerLedger)
-	validator, err = val.Init(channelID,block,peerLedger)
-}
-
-var app *example.App
-var committer *example.Committer
-var consenter *example.Consenter
-var validator *txvalidator.TxValidator
-
-func (s *deliverClient) receive(messages chan *orderer.DeliverResponse) {
-	defer close(messages)
-	for {
-		stopwatch.Measure("deliver", func() {
-			msg, err := s.client.Recv()
-			if err != nil {
-				stopwatch.Flush()
-				panic(fmt.Sprintf("[%s] Receive error: %s\n", s.channelID, err.Error()))
-				return
-			}
-			messages <- msg
-			})
-	}
-}
-
-func handleError(err error, quit bool) {
-	if err != nil {
-		if quit {
-			panic(fmt.Errorf("Error: %s\n", err))
-		} else {
-			fmt.Printf("Error: %s\n", err)
-		}
-	}
-}
-
-func validate(verified <-chan uint64, validated chan uint64){
+func validate(verified <-chan uint64, validated chan uint64) {
 	fmt.Println("Validation started")
 	var weight int64
-	if fabric_extension.PipelineWidth/2<1{
+	if fabric_extension.PipelineWidth/2 < 1 {
 		weight = 1
-	}else{
-		weight = int64(fabric_extension.PipelineWidth/2)
+	} else {
+		weight = int64(fabric_extension.PipelineWidth / 2)
 	}
 	weighted := semaphore.NewWeighted(weight)
 	wg := &sync.WaitGroup{}
@@ -389,20 +331,21 @@ func validate(verified <-chan uint64, validated chan uint64){
 	fmt.Println("Validation completed")
 }
 
-func validateBlock( blockNo uint64, weighted *semaphore.Weighted, output chan uint64, wg *sync.WaitGroup) {
+func validateBlock(blockNo uint64, weighted *semaphore.Weighted, output chan uint64, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer weighted.Release(1)
 	err := validator.ValidateByNo(blockNo)
 	handleError(err, true)
-	output <-blockNo
+	output <- blockNo
 }
+
 func assertResult(blocksize, reps int) {
-	balances := QueryBalances(blocksize, reps)
-	iscorrect:=true
+	balances := queryBalances(blocksize, reps)
+	iscorrect := true
 	for i, balance := range balances {
-		if balance != 2*(i%2) {
+		if int(balance) != 2*(i%2) {
 			fmt.Println("Account ", i, " has balance ", balance, ", should be ", 2*(i%2))
-			iscorrect= false
+			iscorrect = false
 			break
 		}
 	}
@@ -411,69 +354,64 @@ func assertResult(blocksize, reps int) {
 	}
 }
 
-func QueryBalances(blocksize, reps int) []int {
+func queryBalances(blocksize, reps int) []int32 {
 	totalAccountCount := 2 * blocksize * reps
 	accounts := make([]string, 0, totalAccountCount)
 	for i := 0; i < totalAccountCount; i++ {
 		accounts = append(accounts, fmt.Sprintf("account%d", i))
 	}
-	balances, err := app.QueryBalances(accounts)
+	balances, err := storage.QueryBalances(context.Background(), &grpcmocks.Accounts{Accs: accounts})
 	handleError(err, true)
-	return balances
+	return balances.Bal
 }
 
-
-func GetDevConfigDir() (string, error) {
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		return "", fmt.Errorf("GOPATH not set")
-	}
-
-	for _, p := range filepath.SplitList(gopath) {
-		devPath := filepath.Join(p, "src/github.com/hyperledger/fabric/sampleconfig")
-		if !dirExists(devPath) {
-			continue
-		}
-
-		return devPath, nil
-	}
-
-	return "", fmt.Errorf("DevConfigDir not found in %s", gopath)
+type deliverClient struct {
+	client    ab.AtomicBroadcast_DeliverClient
+	channelID string
+	signer    crypto.LocalSigner
+	quiet     bool
 }
 
+func newDeliverClient(client ab.AtomicBroadcast_DeliverClient, channelID string, signer crypto.LocalSigner, quiet bool) *deliverClient {
+	return &deliverClient{client: client, channelID: channelID, signer: signer, quiet: quiet}
+}
 
-func dirExists(path string) bool {
-	fi, err := os.Stat(path)
+func (r *deliverClient) seekHelper(start *ab.SeekPosition, stop *ab.SeekPosition) *cb.Envelope {
+	env, err := utils.CreateSignedEnvelope(cb.HeaderType_DELIVER_SEEK_INFO, r.channelID, r.signer, &ab.SeekInfo{
+		Start:    start,
+		Stop:     stop,
+		Behavior: ab.SeekInfo_BLOCK_UNTIL_READY,
+	}, 0, 0)
 	if err != nil {
-		return false
+		panic(err)
 	}
-	return fi.IsDir()
+	return env
 }
 
+func (r *deliverClient) seekOldest() error {
+	return r.client.Send(r.seekHelper(oldest, maxStop))
+}
 
+func (r *deliverClient) seekNewest() error {
+	return r.client.Send(r.seekHelper(newest, maxStop))
+}
 
-func SetDevFabricConfigPath() (cleanup func()) {
+func (r *deliverClient) seekSingle(blockNumber uint64) error {
+	specific := &ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: blockNumber}}}
+	return r.client.Send(r.seekHelper(specific, specific))
+}
 
-	oldFabricCfgPath, resetFabricCfgPath := os.LookupEnv("FABRIC_CFG_PATH")
-	devConfigDir, err := GetDevConfigDir()
-	if err != nil {
-		fmt.Println("failed to get dev config dir: %s", err)
-	}
-
-	err = os.Setenv("FABRIC_CFG_PATH", devConfigDir)
-	if resetFabricCfgPath {
-		return func() {
-			err := os.Setenv("FABRIC_CFG_PATH", oldFabricCfgPath)
+func (s *deliverClient) receive(messages chan *orderer.DeliverResponse) {
+	defer close(messages)
+	for {
+		stopwatch.Measure("deliver", func() {
+			msg, err := s.client.Recv()
 			if err != nil {
-				fmt.Println("failed to set env", oldFabricCfgPath)
+				stopwatch.Flush()
+				panic(fmt.Sprintf("[%s] Receive error: %s\n", s.channelID, err.Error()))
+				return
 			}
-		}
-	}
-
-	return func() {
-		err := os.Unsetenv("FABRIC_CFG_PATH")
-		if err != nil {
-			fmt.Println("failed to unset")
-		}
+			messages <- msg
+		})
 	}
 }

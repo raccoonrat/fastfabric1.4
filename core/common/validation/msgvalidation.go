@@ -157,8 +157,8 @@ func checkSignatureFromCreator(creatorBytes []byte, sig []byte, msg []byte, Chai
 	if creatorBytes == nil || sig == nil || msg == nil {
 		return errors.New("nil arguments")
 	}
-
-	if _, err := grpcmocks.CrClient.Verify(context.Background(), &grpcmocks.Transaction{Creator: creatorBytes, Data:msg, Signature:sig, ChainID:ChainID}); err != nil{
+	mock := grpcmocks.CryptoClientMock{}
+	if _, err := mock.Verify(context.Background(), &grpcmocks.Transaction{Creator: creatorBytes, Data: msg, Signature: sig, ChainID: ChainID}); err != nil {
 		return err
 	}
 
@@ -263,8 +263,8 @@ func validateConfigTransaction(data []byte, hdr *common.Header) error {
 // validateEndorserTransaction validates the payload of a
 // transaction assuming its type is ENDORSER_TRANSACTION
 func validateEndorserTransaction(utx *blocks.UnmarshaledTx, hdr *common.Header) error {
-	p,_ := utx.GetPayload()
-	data:=p.Data
+	p, _ := utx.GetPayload()
+	data := p.Data
 	putilsLogger.Debugf("validateEndorserTransaction starts for data %p, header %s", data, hdr)
 
 	// check for nil argument
@@ -316,7 +316,7 @@ func validateEndorserTransaction(utx *blocks.UnmarshaledTx, hdr *common.Header) 
 		putilsLogger.Debugf("validateEndorserTransaction info: signature header is valid")
 
 		// if the type is ENDORSER_TRANSACTION we unmarshal a ChaincodeActionPayload
-		ccActionPayload,_, err := act.GetActionPayload()
+		ccActionPayload, _, err := act.GetActionPayload()
 		if err != nil {
 			return err
 		}
@@ -326,13 +326,13 @@ func validateEndorserTransaction(utx *blocks.UnmarshaledTx, hdr *common.Header) 
 			return err
 		}
 
-		_, err = grpcmocks.CrClient.CompareHash(context.Background(),
+		_, err = grpcmocks.CryptoClientMock{}.CompareHash(context.Background(),
 			&grpcmocks.CompareMessage{
-				ChannelHdr: hdr.ChannelHeader,
-				ActionHdr: act.Raw.Header,
-				ProposalPayload:ccActionPayload.ChaincodeProposalPayload,
-				ProposalHash:prp.ProposalHash})
-		if err != nil{
+				ChannelHdr:      hdr.ChannelHeader,
+				ActionHdr:       act.Raw.Header,
+				ProposalPayload: ccActionPayload.ChaincodeProposalPayload,
+				ProposalHash:    prp.ProposalHash})
+		if err != nil {
 			return errors.New("proposal hash does not match")
 		}
 	}
@@ -342,10 +342,10 @@ func validateEndorserTransaction(utx *blocks.UnmarshaledTx, hdr *common.Header) 
 
 // ValidateTransaction checks that the transaction envelope is properly formed
 func ValidateTransaction(tIdx int, blockNo uint64, c channelconfig.ApplicationCapabilities) pb.TxValidationCode {
-	block,_ := blocks.Cache.Get(blockNo)
-	tx :=block.Txs[tIdx]
+	block, _ := blocks.Cache.Get(blockNo)
+	tx := block.Txs[tIdx]
 
-	e,_ := tx.GetEnv()
+	e, _ := tx.GetEnv()
 	putilsLogger.Debugf("ValidateTransactionEnvelope starts for envelope %p", e)
 
 	// check for nil argument
@@ -378,8 +378,9 @@ func ValidateTransaction(tIdx int, blockNo uint64, c channelconfig.ApplicationCa
 
 	signatureResponse := make(chan error)
 	// validate the signature in the envelope
-	go func() {signatureResponse <- checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId)}()
-
+	go func() {
+		signatureResponse <- checkSignatureFromCreator(shdr.Creator, e.Signature, e.Payload, chdr.ChannelId)
+	}()
 
 	// TODO: ensure that creator can transact with us (some ACLs?) which set of APIs is supposed to give us this info?
 
@@ -420,11 +421,11 @@ func ValidateTransaction(tIdx int, blockNo uint64, c channelconfig.ApplicationCa
 		return pb.TxValidationCode_UNSUPPORTED_TX_PAYLOAD
 	}
 
-	err = <- signatureResponse
+	err = <-signatureResponse
 	if err != nil {
 		putilsLogger.Errorf("checkSignatureFromCreator returns err %s", err)
 		return pb.TxValidationCode_BAD_CREATOR_SIGNATURE
-	}else {
+	} else {
 		return pb.TxValidationCode_VALID
 	}
 }

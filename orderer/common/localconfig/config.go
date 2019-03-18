@@ -161,7 +161,7 @@ var Defaults = TopLevel{
 		ListenPort:     7051,
 		GenesisMethod:  "provisional",
 		GenesisProfile: "SampleSingleMSPSolo",
-		SystemChannel:  "test-system-channel-name",
+		SystemChannel:  "test",
 		GenesisFile:    "genesisblock",
 		Profile: Profile{
 			Enabled: false,

@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"errors"
+	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
@@ -12,9 +13,10 @@ import (
 
 type blockCache []*UnmarshaledBlock
 
-const MAXCACHEINDEX = 255
-var Cache = make(blockCache, MAXCACHEINDEX + 1)
-var pvtData = make([]*ledger.BlockAndPvtData, MAXCACHEINDEX + 1)
+const MAXCACHEINDEX = 1023
+
+var Cache = make(blockCache, MAXCACHEINDEX+1)
+var pvtData = make([]*ledger.BlockAndPvtData, MAXCACHEINDEX+1)
 
 func (cache blockCache) Put(block *common.Block) error {
 	cache[findCircularIndex(block.Header.Number)] = newBlock(block)
@@ -22,14 +24,17 @@ func (cache blockCache) Put(block *common.Block) error {
 }
 func (cache blockCache) Get(blockNo uint64) (*UnmarshaledBlock, error) {
 	block := cache[findCircularIndex(blockNo)]
-	if block == nil || block.Rawblock.Header.Number != blockNo {
+	if block == nil {
 		return nil, errors.New("blockNo not found")
+	}
+	if block.Rawblock.Header.Number != blockNo {
+		return nil, errors.New(fmt.Sprintln("Found block", block.Rawblock.Header.Number, "instead"))
 	}
 
 	return block, nil
 }
 
-func GetPvtData(blockNo uint64)(*ledger.BlockAndPvtData, error){
+func GetPvtData(blockNo uint64) (*ledger.BlockAndPvtData, error) {
 	data := pvtData[findCircularIndex(blockNo)]
 	if data == nil || data.Block.Header.Number != blockNo {
 		return nil, errors.New("blockNo not found")
@@ -38,13 +43,12 @@ func GetPvtData(blockNo uint64)(*ledger.BlockAndPvtData, error){
 	return data, nil
 }
 
-
 type UnmarshaledBlock struct {
 	Rawblock *common.Block
-	meta *common.Metadata
-	metaErr error
-	sigs []*common.SignatureHeader
-	sigsErr error
+	meta     *common.Metadata
+	metaErr  error
+	sigs     []*common.SignatureHeader
+	sigsErr  error
 	Txs      []*UnmarshaledTx
 }
 
@@ -102,20 +106,20 @@ func newBlock(rawBlock *common.Block) *UnmarshaledBlock {
 	return b
 }
 
-func (b *UnmarshaledBlock) GetMetadata()(*common.Metadata, error){
+func (b *UnmarshaledBlock) GetMetadata() (*common.Metadata, error) {
 	if b.meta == nil && b.metaErr == nil {
 		b.meta, b.metaErr = utils.GetMetadataFromBlock(b.Rawblock, common.BlockMetadataIndex_SIGNATURES)
 	}
 	return b.meta, b.metaErr
 }
 
-func (b *UnmarshaledBlock) GetSignatureHeaders()([]*common.SignatureHeader, error){
+func (b *UnmarshaledBlock) GetSignatureHeaders() ([]*common.SignatureHeader, error) {
 	if b.sigs == nil && b.sigsErr == nil {
 		var meta *common.Metadata
 		if meta, b.sigsErr = b.GetMetadata(); b.sigsErr == nil {
 			b.sigs = make([]*common.SignatureHeader, len(meta.Signatures))
 			for i, metadataSignature := range meta.Signatures {
-				if b.sigs[i], b.sigsErr = utils.GetSignatureHeader(metadataSignature.SignatureHeader); b.sigsErr != nil{
+				if b.sigs[i], b.sigsErr = utils.GetSignatureHeader(metadataSignature.SignatureHeader); b.sigsErr != nil {
 					break
 				}
 			}
@@ -141,7 +145,7 @@ func (t *UnmarshaledTx) GetPayload() (*common.Payload, error) {
 	return t.payload, t.plErr
 }
 
-func (t *UnmarshaledTx) GetPeerTransaction()(*peer.Transaction, error) {
+func (t *UnmarshaledTx) GetPeerTransaction() (*peer.Transaction, error) {
 	if t.raw == nil && t.rawErr == nil {
 		var pl *common.Payload
 		if pl, t.rawErr = t.GetPayload(); t.rawErr == nil {
@@ -152,13 +156,13 @@ func (t *UnmarshaledTx) GetPeerTransaction()(*peer.Transaction, error) {
 }
 
 func (t *UnmarshaledTx) GetChannelHeader() (*common.ChannelHeader, error) {
-	if t.channelHeader == nil && t.chErr == nil{
+	if t.channelHeader == nil && t.chErr == nil {
 		var pl *common.Payload
 		if pl, t.chErr = t.GetPayload(); t.chErr == nil {
-			if t.channelHeader, t.chErr = utils.UnmarshalChannelHeader(pl.Header.ChannelHeader); t.chErr==nil{
+			if t.channelHeader, t.chErr = utils.UnmarshalChannelHeader(pl.Header.ChannelHeader); t.chErr == nil {
 				t.ext = &peer.ChaincodeHeaderExtension{}
 				t.extErr = proto.Unmarshal(t.channelHeader.Extension, t.ext)
-			}else{
+			} else {
 				t.extErr = t.chErr
 			}
 		}
@@ -182,7 +186,7 @@ func (t *UnmarshaledTx) GetExtension() (*peer.ChaincodeHeaderExtension, error) {
 
 func (t *UnmarshaledTx) GetActions() []*UnmarshalledAction {
 	if t.actions == nil {
-		if raw, err := t.GetPeerTransaction();err == nil {
+		if raw, err := t.GetPeerTransaction(); err == nil {
 			t.actions = make([]*UnmarshalledAction, len(raw.Actions))
 			for i := range t.actions {
 				newAction := &UnmarshalledAction{Raw: raw.Actions[i]}
@@ -203,7 +207,7 @@ func (act *UnmarshalledAction) GetActionPayload() (*peer.ChaincodeActionPayload,
 func (act *UnmarshalledAction) GetEvent() (*peer.ChaincodeEvent, error) {
 	if act.event == nil && act.evErr == nil {
 		var pl *peer.ChaincodeAction
-		if _,pl, act.evErr = act.GetActionPayload();act.evErr == nil {
+		if _, pl, act.evErr = act.GetActionPayload(); act.evErr == nil {
 			act.event = &peer.ChaincodeEvent{}
 			act.evErr = proto.Unmarshal(pl.Events, act.event)
 		}
@@ -213,9 +217,9 @@ func (act *UnmarshalledAction) GetEvent() (*peer.ChaincodeEvent, error) {
 }
 
 func (act *UnmarshalledAction) GetProposalPayload() (*peer.ChaincodeProposalPayload, error) {
-	if act.propPl == nil && act.propPlErr == nil{
+	if act.propPl == nil && act.propPlErr == nil {
 		var pl *peer.ChaincodeActionPayload
-		if pl,_, act.propPlErr = act.GetActionPayload(); act.propPlErr == nil{
+		if pl, _, act.propPlErr = act.GetActionPayload(); act.propPlErr == nil {
 			act.propPl, act.propPlErr = utils.GetChaincodeProposalPayload(pl.ChaincodeProposalPayload)
 		}
 	}
@@ -223,20 +227,19 @@ func (act *UnmarshalledAction) GetProposalPayload() (*peer.ChaincodeProposalPayl
 }
 
 func (act *UnmarshalledAction) GetProposalResponsePayload() (*peer.ProposalResponsePayload, error) {
-	if act.respPl == nil && act.respPlErr == nil{
+	if act.respPl == nil && act.respPlErr == nil {
 		var pl *peer.ChaincodeActionPayload
-		if pl,_, act.respPlErr = act.GetActionPayload(); act.respPlErr == nil{
+		if pl, _, act.respPlErr = act.GetActionPayload(); act.respPlErr == nil {
 			act.respPl, act.propPlErr = utils.GetProposalResponsePayload(pl.Action.ProposalResponsePayload)
 		}
 	}
 	return act.respPl, act.respPlErr
 }
 
-
-func (act *UnmarshalledAction) GetInvokeSpec()(*peer.ChaincodeInvocationSpec, error) {
-	if act.invSpec == nil && act.invErr == nil{
+func (act *UnmarshalledAction) GetInvokeSpec() (*peer.ChaincodeInvocationSpec, error) {
+	if act.invSpec == nil && act.invErr == nil {
 		var prop *peer.ChaincodeProposalPayload
-		if prop, act.invErr = act.GetProposalPayload(); act.invErr == nil{
+		if prop, act.invErr = act.GetProposalPayload(); act.invErr == nil {
 			cis := &peer.ChaincodeInvocationSpec{}
 			act.invErr = proto.Unmarshal(prop.Input, cis)
 		}
@@ -245,11 +248,11 @@ func (act *UnmarshalledAction) GetInvokeSpec()(*peer.ChaincodeInvocationSpec, er
 	return act.invSpec, act.invErr
 }
 
-func (act *UnmarshalledAction) GetDeploymentSpec()(*peer.ChaincodeDeploymentSpec, error) {
-	if act.depSpec == nil && act.depErr == nil{
+func (act *UnmarshalledAction) GetDeploymentSpec() (*peer.ChaincodeDeploymentSpec, error) {
+	if act.depSpec == nil && act.depErr == nil {
 		var inv *peer.ChaincodeInvocationSpec
-		if inv, act.depErr = act.GetInvokeSpec(); act.depErr == nil{
-			if inv!= nil {
+		if inv, act.depErr = act.GetInvokeSpec(); act.depErr == nil {
+			if inv != nil {
 				act.depSpec, act.depErr = utils.GetChaincodeDeploymentSpec(inv.ChaincodeSpec.Input.Args[2])
 			}
 		}

@@ -192,8 +192,8 @@ func NewGossipStateProvider(chainID string, services *ServicesMediator, ledger l
 	_, commChan := services.Accept(remoteStateMsgFilter, true)
 
 	height, err := ledger.LedgerHeight()
-	// The Fast peer does not store the ledger, so the LedgerHeight is always 0
 
+	//The persistent blockchain is not stored on the fast peer, so the LedgerHeight would always be 0
 	//if height == 0 {
 	//	// Panic here since this is an indication of invalid situation which should not happen in normal
 	//	// code path.
