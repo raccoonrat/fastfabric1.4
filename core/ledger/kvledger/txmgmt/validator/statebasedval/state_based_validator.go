@@ -6,7 +6,6 @@ SPDX-License-Identifier: Apache-2.0
 package statebasedval
 
 import (
-	"fmt"
 	"github.com/fabric_extension/block_cache"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
