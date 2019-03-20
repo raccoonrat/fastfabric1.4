@@ -1,1 +1,1 @@
-go run perf_broadcastclient.go -server=localhost:7050 -goroutines=50 -size=4096 -run=100 -messages=100000 -endorse=localhost:10000 -endorse=localhost:10000 -endorse=localhost:10000 -endorse=localhost:10000 -endorse=localhost:10000
+go run perf_broadcastclient.go -server=localhost:7050 -goroutines=50 -run=100 -messages=100000 -endorse=localhost:10000 -endorse=localhost:10000 -endorse=localhost:10000 -endorse=localhost:10000 -endorse=localhost:10000
