@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package broadcast
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"io"
 	"time"
 
@@ -66,29 +67,59 @@ type Handler struct {
 func (bh *Handler) Handle(srv ab.AtomicBroadcast_BroadcastServer) error {
 	addr := util.ExtractRemoteAddress(srv.Context())
 	logger.Debugf("Starting new broadcast loop for %s", addr)
-	for {
-		msg, err := srv.Recv()
-		if err == io.EOF {
-			logger.Debugf("Received EOF from %s, hangup", addr)
-			return nil
-		}
-		if err != nil {
-			logger.Warningf("Error reading from %s: %s", addr, err)
-			return err
-		}
+	messages := make(chan *cb.Envelope, 2*config.BlockPipelineWidth)
+	errs := make(chan error, 2*config.BlockPipelineWidth)
+	go receive(srv, addr, messages, errs)
 
-		resp := bh.ProcessMessage(msg, addr)
-		err = srv.Send(resp)
-		if resp.Status != cb.Status_SUCCESS {
-			return err
+	resps := make(chan chan *ab.BroadcastResponse, 2*config.BlockPipelineWidth)
+	go bh.process(messages, resps, addr)
+
+	for resp := range resps {
+		r := <-resp
+		err := srv.Send(r)
+		if r.Status != cb.Status_SUCCESS {
+			errs <- err
+			break
 		}
 
 		if err != nil {
 			logger.Warningf("Error sending to %s: %s", addr, err)
-			return err
+			errs <- err
+			break
 		}
 	}
 
+	select {
+		case err := <-errs:
+			return err
+		default:
+			return nil
+	}
+}
+
+func receive(srv ab.AtomicBroadcast_BroadcastServer, addr string, messages chan *cb.Envelope, errs chan error) {
+	defer close(messages)
+	for {
+		msg, err := srv.Recv()
+		if err == io.EOF {
+			logger.Debugf("Received EOF from %s, hangup", addr)
+			break
+		}
+		if err != nil {
+			logger.Warningf("Error reading from %s: %s", addr, err)
+			errs <- err
+			break
+		}
+		messages <- msg
+	}
+}
+
+func (bh *Handler) process(messages chan *cb.Envelope, resps chan chan *ab.BroadcastResponse, addr string){
+	for msg := range messages {
+		done := make(chan *ab.BroadcastResponse)
+		resps <- done
+		go func() { done <- bh.ProcessMessage(msg, addr) }()
+	}
 }
 
 type MetricsTracker struct {
