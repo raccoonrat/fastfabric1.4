@@ -7,13 +7,16 @@ SPDX-License-Identifier: Apache-2.0
 package blocksprovider
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
+	"github.com/hyperledger/fabric/fastfabric-extensions/mcs"
+	"github.com/hyperledger/fabric/fastfabric-extensions/pipeline"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaling"
 	"math"
 	"sync/atomic"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/flogging"
-	"github.com/hyperledger/fabric/gossip/api"
 	gossipcommon "github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/gossip/discovery"
 	"github.com/hyperledger/fabric/gossip/util"
@@ -92,7 +95,7 @@ type blocksProviderImpl struct {
 
 	gossip GossipServiceAdapter
 
-	mcs api.MessageCryptoService
+	mcs mcs.MessageCryptoService
 
 	done int32
 
@@ -105,7 +108,7 @@ var maxRetryDelay = time.Second * 10
 var logger = flogging.MustGetLogger("blocksProvider")
 
 // NewBlocksProvider constructor function to create blocks deliverer instance
-func NewBlocksProvider(chainID string, client streamClient, gossip GossipServiceAdapter, mcs api.MessageCryptoService) BlocksProvider {
+func NewBlocksProvider(chainID string, client streamClient, gossip GossipServiceAdapter, mcs mcs.MessageCryptoService) BlocksProvider {
 	return &blocksProviderImpl{
 		chainID:              chainID,
 		client:               client,
@@ -121,12 +124,11 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 	errorStatusCounter := 0
 	statusCounter := 0
 	defer b.client.Close()
-	for !b.isDone() {
-		msg, err := b.client.Recv()
-		if err != nil {
-			logger.Warningf("[%s] Receive error: %s", b.chainID, err.Error())
-			return
-		}
+	defer close(pipeline.ValidatedBlockNums)
+
+	messages := make(chan *orderer.DeliverResponse, config.BlockPipelineWidth)
+	go b.receive(messages)
+	for msg := range messages {
 		switch t := msg.Type.(type) {
 		case *orderer.DeliverResponse_Status:
 			if t.Status == common.Status_SUCCESS {
@@ -160,38 +162,72 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 			errorStatusCounter = 0
 			statusCounter = 0
 			blockNum := t.Block.Header.Number
+			unmarshaling.Cache.Put(t.Block)
 
-			marshaledBlock, err := proto.Marshal(t.Block)
-			if err != nil {
-				logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID, blockNum, err)
-				continue
-			}
-			if err := b.mcs.VerifyBlock(gossipcommon.ChainID(b.chainID), blockNum, marshaledBlock); err != nil {
-				logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, blockNum, err)
-				continue
-			}
+			go b.processBlock(blockNum)
 
-			numberOfPeers := len(b.gossip.PeersOfChannel(gossipcommon.ChainID(b.chainID)))
-			// Create payload with a block received
-			payload := createPayload(blockNum, marshaledBlock)
-			// Use payload to create gossip message
-			gossipMsg := createGossipMsg(b.chainID, payload)
 
-			logger.Debugf("[%s] Adding payload to local buffer, blockNum = [%d]", b.chainID, blockNum)
-			// Add payload to local state payloads buffer
-			if err := b.gossip.AddPayload(b.chainID, payload); err != nil {
-				logger.Warningf("Block [%d] received from ordering service wasn't added to payload buffer: %v", blockNum, err)
-			}
-
-			// Gossip messages with other nodes
-			logger.Debugf("[%s] Gossiping block [%d], peers number [%d]", b.chainID, blockNum, numberOfPeers)
-			if !b.isDone() {
-				b.gossip.Gossip(gossipMsg)
-			}
 		default:
 			logger.Warningf("[%s] Received unknown: %v", b.chainID, t)
 			return
 		}
+	}
+}
+
+func (b *blocksProviderImpl) receive(messages chan *orderer.DeliverResponse) {
+	defer close(messages)
+	for !b.isDone() {
+		msg, err := b.client.Recv()
+		if err != nil {
+			logger.Warningf("[%s] Receive error: %s", b.chainID, err.Error())
+			return
+		}
+		messages <- msg
+	}
+}
+
+func (b *blocksProviderImpl) processBlock(blockNum uint64) {
+	done := make(chan uint64)
+	b.verify(blockNum, done)
+	for verifiedBlockNum := range done{
+		pipeline.ValidatedBlockNums <- verifiedBlockNum
+		b.gossipBlock(verifiedBlockNum)
+	}
+}
+
+func (b *blocksProviderImpl) verify(blockNum uint64, done chan uint64){
+	defer close(done)
+	if err := b.mcs.VerifyBlockByNum(gossipcommon.ChainID(b.chainID), blockNum); err != nil {
+		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, blockNum, err)
+		return
+	}
+
+	done <- blockNum
+}
+
+func (b *blocksProviderImpl) gossipBlock(blockNum uint64) {
+	uBlock, err := unmarshaling.Cache.Get(blockNum)
+	if err != nil {
+		logger.Errorf("[%s] Error getting block with sequence number %d from cache, due to %s", b.chainID, blockNum, err)
+		return
+	}
+
+	marshaledBlock, err := proto.Marshal(uBlock.Raw)
+	if err != nil {
+		logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID, blockNum, err)
+		return
+	}
+
+	numberOfPeers := len(b.gossip.PeersOfChannel(gossipcommon.ChainID(b.chainID)))
+	// Create payload with a block received
+	payload := createPayload(blockNum, marshaledBlock)
+	// Use payload to create gossip message
+	gossipMsg := createGossipMsg(b.chainID, payload)
+
+	// Gossip messages with other nodes
+	logger.Debugf("[%s] Gossiping block [%d], peers number [%d]", b.chainID, blockNum, numberOfPeers)
+	if !b.isDone() {
+		b.gossip.Gossip(gossipMsg)
 	}
 }
 

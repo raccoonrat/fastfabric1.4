@@ -8,10 +8,10 @@ package transientstore
 
 import (
 	"errors"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/flogging"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
@@ -104,12 +104,12 @@ type EndorserPvtSimulationResultsWithConfig struct {
 // private write sets of simulated transactions, and implements TransientStoreProvider
 // interface.
 type storeProvider struct {
-	dbProvider *leveldbhelper.Provider
+	dbProvider *statedb.Provider
 }
 
 // store holds an instance of a levelDB.
 type store struct {
-	db       *leveldbhelper.DBHandle
+	db       *statedb.DBHandle
 	ledgerID string
 }
 
@@ -121,7 +121,7 @@ type RwsetScanner struct {
 
 // NewStoreProvider instantiates TransientStoreProvider
 func NewStoreProvider() StoreProvider {
-	dbProvider := leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: GetTransientStorePath()})
+	dbProvider := statedb.NewProvider()
 	return &storeProvider{dbProvider: dbProvider}
 }
 
@@ -144,7 +144,7 @@ func (s *store) Persist(txid string, blockHeight uint64,
 
 	logger.Debugf("Persisting private data to transient store for txid [%s] at block height [%d]", txid, blockHeight)
 
-	dbBatch := leveldbhelper.NewUpdateBatch()
+	dbBatch := statedb.NewUpdateBatch()
 
 	// Create compositeKey with appropriate prefix, txid, uuid and blockHeight
 	// Due to the fact that the txid may have multiple private write sets persisted from different
@@ -192,7 +192,7 @@ func (s *store) PersistWithConfig(txid string, blockHeight uint64,
 
 	logger.Debugf("Persisting private data to transient store for txid [%s] at block height [%d]", txid, blockHeight)
 
-	dbBatch := leveldbhelper.NewUpdateBatch()
+	dbBatch := statedb.NewUpdateBatch()
 
 	// Create compositeKey with appropriate prefix, txid, uuid and blockHeight
 	// Due to the fact that the txid may have multiple private write sets persisted from different
@@ -259,7 +259,7 @@ func (s *store) PurgeByTxids(txids []string) error {
 
 	logger.Debug("Purging private data from transient store for committed txids")
 
-	dbBatch := leveldbhelper.NewUpdateBatch()
+	dbBatch := statedb.NewUpdateBatch()
 
 	for _, txid := range txids {
 		// Construct startKey and endKey to do an range query
@@ -310,7 +310,7 @@ func (s *store) PurgeByHeight(maxBlockNumToRetain uint64) error {
 	endKey := createPurgeIndexByHeightRangeEndKey(maxBlockNumToRetain - 1)
 	iter := s.db.GetIterator(startKey, endKey)
 
-	dbBatch := leveldbhelper.NewUpdateBatch()
+	dbBatch := statedb.NewUpdateBatch()
 
 	// Get all txid and uuid from above result and remove it from transient store (both
 	// write set and the corresponding index.

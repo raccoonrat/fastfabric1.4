@@ -8,6 +8,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/mcs"
 	"net"
 	"net/http"
 	"os"
@@ -862,7 +863,7 @@ func initGossipService(policyMgr policies.ChannelPolicyManagerGetter, peerServer
 		certs.TLSClientCert.Store(&clientCert)
 	}
 
-	messageCryptoService := peergossip.NewMCS(
+	messageCryptoService := mcs.NewMSPMessageCryptoService(
 		policyMgr,
 		localmsp.NewSigner(),
 		mgmt.NewDeserializersManager(),

@@ -9,11 +9,11 @@ package fsblkstorage
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/common/ledger/util"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	ledgerUtil "github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
@@ -54,10 +54,10 @@ type blockIdxInfo struct {
 
 type blockIndex struct {
 	indexItemsMap map[blkstorage.IndexableAttr]bool
-	db            *leveldbhelper.DBHandle
+	db            *statedb.DBHandle
 }
 
-func newBlockIndex(indexConfig *blkstorage.IndexConfig, db *leveldbhelper.DBHandle) (*blockIndex, error) {
+func newBlockIndex(indexConfig *blkstorage.IndexConfig, db *statedb.DBHandle) (*blockIndex, error) {
 	indexItems := indexConfig.AttrsToIndex
 	logger.Debugf("newBlockIndex() - indexItems:[%s]", indexItems)
 	indexItemsMap := make(map[blkstorage.IndexableAttr]bool)
@@ -97,7 +97,7 @@ func (index *blockIndex) indexBlock(blockIdxInfo *blockIdxInfo) error {
 	flp := blockIdxInfo.flp
 	txOffsets := blockIdxInfo.txOffsets
 	txsfltr := ledgerUtil.TxValidationFlags(blockIdxInfo.metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
-	batch := leveldbhelper.NewUpdateBatch()
+	batch := statedb.NewUpdateBatch()
 	flpBytes, err := flp.marshal()
 	if err != nil {
 		return err

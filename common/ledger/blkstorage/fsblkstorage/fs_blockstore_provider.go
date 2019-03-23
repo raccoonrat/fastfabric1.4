@@ -19,19 +19,20 @@ package fsblkstorage
 import (
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/common/ledger/util"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/fastfabric-extensions/blockstorage"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 )
 
 // FsBlockstoreProvider provides handle to block storage - this is not thread-safe
 type FsBlockstoreProvider struct {
 	conf            *Conf
 	indexConfig     *blkstorage.IndexConfig
-	leveldbProvider *leveldbhelper.Provider
+	ffdbProvider 	*statedb.Provider
 }
 
 // NewProvider constructs a filesystem based block store provider
 func NewProvider(conf *Conf, indexConfig *blkstorage.IndexConfig) blkstorage.BlockStoreProvider {
-	p := leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: conf.getIndexDir()})
+	p := statedb.NewProvider()
 	return &FsBlockstoreProvider{conf, indexConfig, p}
 }
 
@@ -44,8 +45,8 @@ func (p *FsBlockstoreProvider) CreateBlockStore(ledgerid string) (blkstorage.Blo
 // If a blockstore is not existing, this method creates one
 // This method should be invoked only once for a particular ledgerid
 func (p *FsBlockstoreProvider) OpenBlockStore(ledgerid string) (blkstorage.BlockStore, error) {
-	indexStoreHandle := p.leveldbProvider.GetDBHandle(ledgerid)
-	return newFsBlockStore(ledgerid, p.conf, p.indexConfig, indexStoreHandle), nil
+	indexStoreHandle := p.ffdbProvider.GetDBHandle(ledgerid)
+	return blockstorage.NewFsBlockStore(ledgerid, p.indexConfig, indexStoreHandle), nil
 }
 
 // Exists tells whether the BlockStore with given id exists
@@ -61,5 +62,5 @@ func (p *FsBlockstoreProvider) List() ([]string, error) {
 
 // Close closes the FsBlockstoreProvider
 func (p *FsBlockstoreProvider) Close() {
-	p.leveldbProvider.Close()
+	p.ffdbProvider.Close()
 }

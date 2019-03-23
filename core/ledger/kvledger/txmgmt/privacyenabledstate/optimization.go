@@ -7,15 +7,15 @@ SPDX-License-Identifier: Apache-2.0
 package privacyenabledstate
 
 import (
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 )
 
 type metadataHint struct {
 	cache      map[string]bool
-	bookkeeper *leveldbhelper.DBHandle
+	bookkeeper *statedb.DBHandle
 }
 
-func newMetadataHint(bookkeeper *leveldbhelper.DBHandle) *metadataHint {
+func newMetadataHint(bookkeeper *statedb.DBHandle) *metadataHint {
 	cache := map[string]bool{}
 	itr := bookkeeper.GetIterator(nil, nil)
 	defer itr.Release()
@@ -31,7 +31,7 @@ func (h *metadataHint) metadataEverUsedFor(namespace string) bool {
 }
 
 func (h *metadataHint) setMetadataUsedFlag(updates *UpdateBatch) {
-	batch := leveldbhelper.NewUpdateBatch()
+	batch := statedb.NewUpdateBatch()
 	for ns := range filterNamespacesThatHasMetadata(updates) {
 		if h.cache[ns] {
 			continue

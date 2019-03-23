@@ -9,9 +9,9 @@ package confighistory
 import (
 	"bytes"
 	"encoding/binary"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"math"
 
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/pkg/errors"
 )
 
@@ -31,24 +31,24 @@ type compositeKV struct {
 }
 
 type dbProvider struct {
-	*leveldbhelper.Provider
+	*statedb.Provider
 }
 
 type db struct {
-	*leveldbhelper.DBHandle
+	*statedb.DBHandle
 }
 
 type batch struct {
-	*leveldbhelper.UpdateBatch
+	*statedb.UpdateBatch
 }
 
 func newDBProvider(dbPath string) *dbProvider {
 	logger.Debugf("Opening db for config history: db path = %s", dbPath)
-	return &dbProvider{leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: dbPath})}
+	return &dbProvider{statedb.NewProvider()}
 }
 
 func newBatch() *batch {
-	return &batch{leveldbhelper.NewUpdateBatch()}
+	return &batch{statedb.NewUpdateBatch()}
 }
 
 func (p *dbProvider) getDB(id string) *db {

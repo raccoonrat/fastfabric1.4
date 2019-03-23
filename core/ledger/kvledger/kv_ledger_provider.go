@@ -9,9 +9,9 @@ package kvledger
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/confighistory"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/bookkeeping"
@@ -23,7 +23,6 @@ import (
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/pkg/errors"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 var (
@@ -259,13 +258,11 @@ func panicOnErr(err error, mgsFormat string, args ...interface{}) {
 // Ledger id persistence related code
 ///////////////////////////////////////////////////////////////////////
 type idStore struct {
-	db *leveldbhelper.DB
+	db *statedb.DBHandle
 }
 
 func openIDStore(path string) *idStore {
-	db := leveldbhelper.CreateDB(&leveldbhelper.Conf{DBPath: path})
-	db.Open()
-	return &idStore{db}
+	return &idStore{statedb.NewProvider().GetDBHandle("idstore")}
 }
 
 func (s *idStore) setUnderConstructionFlag(ledgerID string) error {
@@ -297,7 +294,7 @@ func (s *idStore) createLedgerID(ledgerID string, gb *common.Block) error {
 	if val, err = proto.Marshal(gb); err != nil {
 		return err
 	}
-	batch := &leveldb.Batch{}
+	batch := &statedb.UpdateBatch{}
 	batch.Put(key, val)
 	batch.Delete(underConstructionLedgerKey)
 	return s.db.WriteBatch(batch, true)
