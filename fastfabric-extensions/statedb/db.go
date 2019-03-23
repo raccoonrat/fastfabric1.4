@@ -3,10 +3,11 @@ package statedb
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/hyperledger/fabric/common/cauthdsl"
+	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/core/common/ccprovider"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/experiment"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -17,9 +18,20 @@ var KeyNotFound = errors.New("key not found")
 
 type DB struct {
 	db *ValueHashtable
+	lvldb *leveldbhelper.DB
 }
 
-func CreateDB() (*DB){
+func CreateDB(path string) (*DB){
+	if config.IsStorage{
+		return &DB{lvldb: leveldbhelper.CreateDB(&leveldbhelper.Conf{path})}
+	}else {
+		return createDB()
+	}
+
+
+}
+
+func createDB() (*DB){
 	db := &DB {db:NewHT()}
 	ccname := "PaymentApp"
 	cdbytes := utils.MarshalOrPanic(&ccprovider.ChaincodeData{
@@ -36,14 +48,25 @@ func CreateDB() (*DB){
 }
 
 func (ledger *DB) Open() {
+	if config.IsStorage{
+		ledger.lvldb.Open()
+	}
 }
 
 func (ledger *DB) Close() error {
+	if config.IsStorage {
+		ledger.lvldb.Close()
+		return nil
+	}
 	ledger.db.Cleanup()
 	return nil
 }
 
 func (ledger *DB) Get(bytes []byte) ([]byte, error) {
+	if config.IsStorage {
+		return ledger.lvldb.Get(bytes)
+	}
+
 	if val, err := ledger.db.Get(bytes); err != nil {
 		return nil, KeyNotFound
 	} else {
@@ -51,23 +74,26 @@ func (ledger *DB) Get(bytes []byte) ([]byte, error) {
 	}
 }
 func (ledger *DB) Put(key []byte, value []byte, sync bool) error {
+	if config.IsStorage {
+		return ledger.lvldb.Put(key, value, sync)
+	}
+
 	return ledger.db.Put(key, value)
 }
 func (ledger *DB) Delete(key []byte, sync bool) error {
+	if config.IsStorage {
+		return ledger.lvldb.Delete(key, sync)
+	}
+
 	return ledger.db.Remove(key)
 }
 func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
+	if config.IsStorage {
+		return ledger.lvldb.GetIterator(sk, ek)
+	}
+
 	keys := ledger.db.GetKeys(sk, ek)
 	return &Iterimpl{keys:keys, idx:0, db:ledger.db}
-}
-
-func (ledger *DB) GetKeys() []string {
-	var keys []string
-	fmt.Println("db:", ledger.db)
-	for _, key:= range ledger.db.GetKeys([]byte{0}, []byte{255,255,255,255,255,255,255,255,255,255,255,255,255,255}){
-		keys = append(keys, string(key))
-	}
-	return keys
 }
 
 type Iterimpl struct {
@@ -127,8 +153,13 @@ func (i *Iterimpl) Key() []byte {
 	if !i.Valid() {
 		return nil
 	}
-	return i.keys[i.idx]
+	return retrieveAppKey(i.keys[i.idx])
 }
+
+func retrieveAppKey(levelKey []byte) []byte {
+	return bytes.SplitN(levelKey, dbNameKeySep, 2)[1]
+}
+
 
 func (i *Iterimpl) Value() []byte {
 	if !i.Valid() {

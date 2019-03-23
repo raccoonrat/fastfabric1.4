@@ -32,7 +32,7 @@ type VersionedDBProvider struct {
 func NewVersionedDBProvider() *VersionedDBProvider {
 	dbPath := ledgerconfig.GetStateLevelDBPath()
 	logger.Debugf("constructing VersionedDBProvider dbPath=%s", dbPath)
-	dbProvider := ffstatedb.NewProvider()
+	dbProvider := ffstatedb.NewProvider(dbPath)
 	return &VersionedDBProvider{dbProvider}
 }
 

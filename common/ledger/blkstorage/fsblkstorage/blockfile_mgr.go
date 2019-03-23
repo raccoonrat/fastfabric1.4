@@ -9,7 +9,6 @@ package fsblkstorage
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -19,6 +18,7 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/common/ledger/util"
+	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	putil "github.com/hyperledger/fabric/protos/utils"
@@ -38,7 +38,7 @@ var (
 type blockfileMgr struct {
 	rootDir           string
 	conf              *Conf
-	db                *statedb.DBHandle
+	db                *leveldbhelper.DBHandle
 	index             index
 	cpInfo            *checkpointInfo
 	cpInfoCond        *sync.Cond
@@ -87,7 +87,7 @@ At start up a new manager:
 		-- If index and file system are not in sync, syncs index from the FS
   *)  Updates blockchain info used by the APIs
 */
-func newBlockfileMgr(id string, conf *Conf, indexConfig *blkstorage.IndexConfig, indexStore *statedb.DBHandle) *blockfileMgr {
+func newBlockfileMgr(id string, conf *Conf, indexConfig *blkstorage.IndexConfig, indexStore *leveldbhelper.DBHandle) *blockfileMgr {
 	logger.Debugf("newBlockfileMgr() initializing file-based block storage for ledger: %s ", id)
 	//Determine the root directory for the blockfile storage, if it does not exist create it
 	rootDir := conf.getLedgerBlockDir(id)

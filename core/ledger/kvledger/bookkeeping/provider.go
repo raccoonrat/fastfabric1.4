@@ -10,8 +10,7 @@ import (
 	"fmt"
 
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
-
-	ffstatedb "github.com/hyperledger/fabric/fastfabric-extensions/statedb"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 )
 
 // Category is an enum type for representing the bookkeeping of different type
@@ -27,23 +26,23 @@ const (
 // Provider provides handle to different bookkeepers for the given ledger
 type Provider interface {
 	// GetDBHandle returns a db handle that can be used for maintaining the bookkeeping of a given category
-	GetDBHandle(ledgerID string, cat Category) *ffstatedb.DBHandle
+	GetDBHandle(ledgerID string, cat Category) *statedb.DBHandle
 	// Close closes the BookkeeperProvider
 	Close()
 }
 
 type provider struct {
-	dbProvider *ffstatedb.Provider
+	dbProvider *statedb.Provider
 }
 
 // NewProvider instantiates a new provider
 func NewProvider() Provider {
-	dbProvider := ffstatedb.NewProvider()
+	dbProvider := statedb.NewProvider(getInternalBookkeeperPath())
 	return &provider{dbProvider: dbProvider}
 }
 
 // GetDBHandle implements the function in the interface 'BookkeeperProvider'
-func (provider *provider) GetDBHandle(ledgerID string, cat Category) *ffstatedb.DBHandle {
+func (provider *provider) GetDBHandle(ledgerID string, cat Category) *statedb.DBHandle {
 	return provider.dbProvider.GetDBHandle(fmt.Sprintf(ledgerID+"/%d", cat))
 }
 

@@ -17,11 +17,12 @@ limitations under the License.
 package statedb
 
 import (
-	"bytes"
+	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/op/go-logging"
-	"sync"
+	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
-
+	"sync"
 )
 
 var logger = logging.MustGetLogger("dbhelper")
@@ -34,12 +35,19 @@ type Provider struct {
 	db        *DB
 	dbHandles map[string]*DBHandle
 	mux       sync.Mutex
+	lvlProv 	*leveldbhelper.Provider
 }
 
 // NewProvider constructs a Provider
-func NewProvider() *Provider {
-	dbHandle:= CreateDB()
-	return &Provider{dbHandle, make(map[string]*DBHandle), sync.Mutex{}}
+func NewProvider(dbPath string) *Provider {
+	var p = &Provider{dbHandles: make(map[string]*DBHandle), mux: sync.Mutex{}}
+	if config.IsStorage{
+		p.lvlProv = leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: dbPath})
+	} else{
+		p.db = createDB()
+	}
+
+	return p
 }
 
 // GetDBHandle returns a handle to a named db
@@ -47,111 +55,154 @@ func (p *Provider) GetDBHandle(dbName string) *DBHandle {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 	dbHandle := p.dbHandles[dbName]
+
 	if dbHandle == nil {
-		dbHandle = &DBHandle{dbName, p.db}
-		p.dbHandles[dbName] = dbHandle
+		if config.IsStorage {
+			lvlHandle := p.lvlProv.GetDBHandle(dbName)
+			p.dbHandles[dbName] = &DBHandle{dbName:dbName, lvlHandle:lvlHandle}
+		} else {
+			p.dbHandles[dbName] = &DBHandle{dbName:dbName, db:p.db}
+		}
 	}
 
 	return dbHandle
 }
 
 func (p *Provider) Close() {
-	p.db.Close()
+	if config.IsStorage {
+		p.lvlProv.Close()
+	} else{
+		p.db.Close()
+	}
 }
 
 // DBHandle is an handle to a named db
 type DBHandle struct {
-	DbName string
-	Db     *DB
+	dbName string
+	db     *DB
+	lvlHandle * leveldbhelper.DBHandle
 }
 
 // Get returns the value for the given key
 func (h *DBHandle) Get(key []byte) ([]byte, error) {
-	if val, err :=h.Db.Get(constructLevelKey(h.DbName, key)); err == KeyNotFound{
-		return nil, nil
-	}else{return val, nil}
+	if config.IsStorage{
+		return h.lvlHandle.Get(key)
+	}else {
+		val, err := h.db.Get(constructLevelKey(h.dbName, key))
+		if err == KeyNotFound {
+			return nil, nil
+		}
+		if err != nil {
+			logger.Errorf("Error retrieving key [%#v]: %s", key, err)
+			return nil, errors.Wrapf(err, "error retrieving key [%#v]", key)
+		}
+		return val, nil
+	}
 }
 
 // Put saves the key/value
 func (h *DBHandle) Put(key []byte, value []byte, sync bool) error {
-	return h.Db.Put(constructLevelKey(h.DbName, key), value, sync)
+	if config.IsStorage{
+		return h.lvlHandle.Put(key, value, sync)
+	}else {
+		return h.db.Put(constructLevelKey(h.dbName, key), value, sync)
+	}
 }
 
 // Delete deletes the given key
 func (h *DBHandle) Delete(key []byte, sync bool) error {
-	return h.Db.Delete(constructLevelKey(h.DbName, key), sync)
+	if config.IsStorage{
+		return h.lvlHandle.Delete(key, sync)
+	}else {
+		return h.db.Delete(constructLevelKey(h.dbName, key), sync)
+	}
 }
 
 // WriteBatch writes a batch in an atomic way
 func (h *DBHandle) WriteBatch(batch *UpdateBatch, sync bool) error {
-	for k, v := range batch.KVs {
-		key := constructLevelKey(h.DbName, []byte(k))
-		if v == nil {
-			h.Db.Delete(key, true)
-		} else {
-			h.Db.Put(key, v, true)
+	if config.IsStorage{
+		return h.lvlHandle.WriteBatch(batch.lvlBatch, sync)
+	}else {
+		for k, v := range batch.KVs {
+			key := constructLevelKey(h.dbName, []byte(k))
+			if v == nil {
+				h.db.Delete(key, true)
+			} else {
+				h.db.Put(key, v, true)
+			}
 		}
+		return nil
 	}
-	return nil
 }
 
 // GetIterator gets an handle to iterator. The iterator should be released after the use.
 // The resultset contains all the keys that are present in the db between the startKey (inclusive) and the endKey (exclusive).
 // A nil startKey represents the first available key and a nil endKey represent a logical key after the last available key
 func (h *DBHandle) GetIterator(startKey []byte, endKey []byte) *Iterator {
-	sKey := constructLevelKey(h.DbName, startKey)
-	eKey := constructLevelKey(h.DbName, endKey)
-	if endKey == nil {
-		// replace the last byte 'dbNameKeySep' by 'lastKeyIndicator'
-		eKey[len(eKey)-1] = lastKeyIndicator
+	if config.IsStorage{
+		return &Iterator{h.lvlHandle.GetIterator(startKey, endKey)}
+	}else {
+		sKey := constructLevelKey(h.dbName, startKey)
+		eKey := constructLevelKey(h.dbName, endKey)
+		if endKey == nil {
+			// replace the last byte 'dbNameKeySep' by 'lastKeyIndicator'
+			eKey[len(eKey)-1] = lastKeyIndicator
+		}
+		logger.Debugf("Getting iterator for range [%#v] - [%#v]", sKey, eKey)
+		return &Iterator{Iterator: h.db.GetIterator(sKey, eKey)}
 	}
-	logger.Debugf("Getting iterator for range [%#v] - [%#v]", sKey, eKey)
-	return &Iterator{h.Db.GetIterator(sKey, eKey)}
-}
-func (h *DBHandle) Close() {
-	h.Db.Close()
 }
 
 // UpdateBatch encloses the details of multiple `updates`
 type UpdateBatch struct {
 	KVs map[string][]byte
+	lvlBatch *leveldbhelper.UpdateBatch
 }
 
 // NewUpdateBatch constructs an instance of a Batch
 func NewUpdateBatch() *UpdateBatch {
-	return &UpdateBatch{make(map[string][]byte)}
+	if config.IsStorage{
+		return &UpdateBatch{lvlBatch:leveldbhelper.NewUpdateBatch()}
+	}else {
+		return &UpdateBatch{KVs:make(map[string][]byte)}
+	}
 }
 
 // Put adds a KV
 func (batch *UpdateBatch) Put(key []byte, value []byte) {
-	if value == nil {
-		panic("Nil value not allowed")
+	if config.IsStorage{
+		batch.lvlBatch.Put(key, value)
+	}else {
+		if value == nil {
+			panic("Nil value not allowed")
+		}
+		batch.KVs[string(key)] = value
 	}
-	batch.KVs[string(key)] = value
 }
 
 // Delete deletes a Key and associated value
 func (batch *UpdateBatch) Delete(key []byte) {
-	batch.KVs[string(key)] = nil
+	if config.IsStorage{
+		batch.lvlBatch.Delete(key)
+	}else {
+		batch.KVs[string(key)] = nil
+	}
 }
 
 // Len returns the number of entries in the batch
 func (batch *UpdateBatch) Len() int {
-	return len(batch.KVs)
+	if config.IsStorage{
+		return batch.lvlBatch.Len()
+	}else {
+		return len(batch.KVs)
+	}
 }
 
 type Iterator struct {
 	iterator.Iterator
 }
 
-func (itr *Iterator) Key() []byte {
-	return retrieveAppKey(itr.Iterator.Key())
-}
-
 func constructLevelKey(dbName string, key []byte) []byte {
 	return append(append([]byte(dbName), dbNameKeySep...), key...)
 }
 
-func retrieveAppKey(levelKey []byte) []byte {
-	return bytes.SplitN(levelKey, dbNameKeySep, 2)[1]
-}

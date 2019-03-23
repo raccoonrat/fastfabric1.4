@@ -1,4 +1,4 @@
-package blockstorage
+package fsblkstorage
 
 import (
 	"github.com/hyperledger/fabric/common/ledger"
@@ -8,7 +8,7 @@ import (
 	"github.com/hyperledger/fabric/protos/peer"
 )
 
-func NewFsBlockStore(id string, indexConfig *blkstorage.IndexConfig,
+func newFsBlockStore(id string, indexConfig *blkstorage.IndexConfig,
 	dbHandle *statedb.DBHandle) *BlockStore{
 	return &BlockStore{}
 }

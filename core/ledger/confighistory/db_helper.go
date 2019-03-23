@@ -44,7 +44,7 @@ type batch struct {
 
 func newDBProvider(dbPath string) *dbProvider {
 	logger.Debugf("Opening db for config history: db path = %s", dbPath)
-	return &dbProvider{statedb.NewProvider()}
+	return &dbProvider{statedb.NewProvider(dbPath)}
 }
 
 func newBatch() *batch {

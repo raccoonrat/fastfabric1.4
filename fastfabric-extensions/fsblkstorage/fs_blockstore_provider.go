@@ -18,21 +18,19 @@ package fsblkstorage
 
 import (
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
-	"github.com/hyperledger/fabric/common/ledger/util"
-	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 )
 
 // FsBlockstoreProvider provides handle to block storage - this is not thread-safe
 type FsBlockstoreProvider struct {
-	conf            *Conf
 	indexConfig     *blkstorage.IndexConfig
-	leveldbProvider *leveldbhelper.Provider
+	ffdbProvider	*statedb.Provider
+	openStores		map[string]bool
 }
 
-// NewProvider constructs a filesystem based block store provider
-func NewProvider(conf *Conf, indexConfig *blkstorage.IndexConfig) blkstorage.BlockStoreProvider {
-	p := leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: conf.getIndexDir()})
-	return &FsBlockstoreProvider{conf, indexConfig, p}
+func NewProvider(indexConfig *blkstorage.IndexConfig) blkstorage.BlockStoreProvider {
+	p := statedb.NewProvider("")
+	return &FsBlockstoreProvider{ indexConfig, p, make(map[string]bool)}
 }
 
 // CreateBlockStore simply calls OpenBlockStore
@@ -44,22 +42,29 @@ func (p *FsBlockstoreProvider) CreateBlockStore(ledgerid string) (blkstorage.Blo
 // If a blockstore is not existing, this method creates one
 // This method should be invoked only once for a particular ledgerid
 func (p *FsBlockstoreProvider) OpenBlockStore(ledgerid string) (blkstorage.BlockStore, error) {
-	indexStoreHandle := p.leveldbProvider.GetDBHandle(ledgerid)
-	return newFsBlockStore(ledgerid, p.conf, p.indexConfig, indexStoreHandle), nil
+	indexStoreHandle := p.ffdbProvider.GetDBHandle(ledgerid)
+	p.openStores[ledgerid] = true
+	return newFsBlockStore(ledgerid, p.indexConfig, indexStoreHandle), nil
 }
 
 // Exists tells whether the BlockStore with given id exists
 func (p *FsBlockstoreProvider) Exists(ledgerid string) (bool, error) {
-	exists, _, err := util.FileExists(p.conf.getLedgerBlockDir(ledgerid))
-	return exists, err
+	_,exists := p.openStores[ledgerid]
+	return exists, nil
 }
 
 // List lists the ids of the existing ledgers
 func (p *FsBlockstoreProvider) List() ([]string, error) {
-	return util.ListSubdirs(p.conf.getChainsDir())
+	keys := make([]string, len(p.openStores))
+	i:=0
+	for k, _:=range p.openStores{
+		keys[i] = k
+		i+=1
+	}
+	return keys, nil
 }
 
 // Close closes the FsBlockstoreProvider
 func (p *FsBlockstoreProvider) Close() {
-	p.leveldbProvider.Close()
+	p.ffdbProvider.Close()
 }
