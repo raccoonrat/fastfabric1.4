@@ -9,6 +9,7 @@ package valimpl
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/customtx"
@@ -23,7 +24,6 @@ import (
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/peer"
-	"github.com/hyperledger/fabric/protos/utils"
 )
 
 // validateAndPreparePvtBatch pulls out the private write-set for the transactions that are marked as valid
@@ -97,24 +97,17 @@ func validatePvtdata(tx *internal.Transaction, pvtdata *ledger.TxPvtData) error 
 // The retuned 'Block' structure contains only transactions that are endorser transactions and are not alredy marked as invalid
 func preprocessProtoBlock(txMgr txmgr.TxMgr,
 	validateKVFunc func(key string, value []byte) error,
-	block *common.Block, doMVCCValidation bool,
+	block *unmarshaled.Block, doMVCCValidation bool,
 ) (*internal.Block, []*txmgr.TxStatInfo, error) {
 	b := &internal.Block{Num: block.Header.Number}
 	txsStatInfo := []*txmgr.TxStatInfo{}
 	// Committer validator has already set validation flags based on well formed tran checks
-	txsFilter := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
-	for txIndex, envBytes := range block.Data.Data {
-		var env *common.Envelope
-		var chdr *common.ChannelHeader
-		var payload *common.Payload
+	txsFilter := util.TxValidationFlags(block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	for txIndex, tx := range block.Txs {
 		var err error
 		txStatInfo := &txmgr.TxStatInfo{TxType: -1}
 		txsStatInfo = append(txsStatInfo, txStatInfo)
-		if env, err = utils.GetEnvelopeFromBlock(envBytes); err == nil {
-			if payload, err = utils.GetPayload(env); err == nil {
-				chdr, err = utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
-			}
-		}
+		chdr := tx.Envelope.Payload.Header.ChannelHeader
 		if txsFilter.IsInvalid(txIndex) {
 			// Skipping invalid transaction
 			logger.Warningf("Channel [%s]: Block [%d] Transaction index [%d] TxId [%s]"+
@@ -133,19 +126,19 @@ func preprocessProtoBlock(txMgr txmgr.TxMgr,
 		txStatInfo.TxType = txType
 		if txType == common.HeaderType_ENDORSER_TRANSACTION {
 			// extract actions from the envelope message
-			respPayload, err := utils.GetActionFromEnvelope(envBytes)
-			if err != nil {
+			respPayload := tx.Envelope.Payload.Transaction.Actions[0].Payload.Action.ProposalResponsePayload.Extension
+			if respPayload.Err != nil {
 				txsFilter.SetFlag(txIndex, peer.TxValidationCode_NIL_TXACTION)
 				continue
 			}
 			txStatInfo.ChaincodeID = respPayload.ChaincodeId
-			txRWSet = &rwsetutil.TxRwSet{}
-			if err = txRWSet.FromProtoBytes(respPayload.Results); err != nil {
+			txRWSet :=respPayload.Results
+			if txRWSet.Err != nil {
 				txsFilter.SetFlag(txIndex, peer.TxValidationCode_INVALID_OTHER_REASON)
 				continue
 			}
 		} else {
-			rwsetProto, err := processNonEndorserTx(env, chdr.TxId, txType, txMgr, !doMVCCValidation)
+			rwsetProto, err := processNonEndorserTx(tx.Envelope, chdr.TxId, txType, txMgr, !doMVCCValidation)
 			if _, ok := err.(*customtx.InvalidTxError); ok {
 				txsFilter.SetFlag(txIndex, peer.TxValidationCode_INVALID_OTHER_REASON)
 				continue
@@ -174,7 +167,7 @@ func preprocessProtoBlock(txMgr txmgr.TxMgr,
 	return b, txsStatInfo, nil
 }
 
-func processNonEndorserTx(txEnv *common.Envelope, txid string, txType common.HeaderType, txmgr txmgr.TxMgr, synchingState bool) (*rwset.TxReadWriteSet, error) {
+func processNonEndorserTx(txEnv *unmarshaled.Envelope, txid string, txType common.HeaderType, txmgr txmgr.TxMgr, synchingState bool) (*rwset.TxReadWriteSet, error) {
 	logger.Debugf("Performing custom processing for transaction [txid=%s], [txType=%s]", txid, txType)
 	processor := customtx.GetProcessor(txType)
 	logger.Debugf("Processor for custom tx processing:%#v", processor)
@@ -214,12 +207,12 @@ func validateWriteset(txRWSet *rwsetutil.TxRwSet, validateKVFunc func(key string
 }
 
 // postprocessProtoBlock updates the proto block's validation flags (in metadata) by the results of validation process
-func postprocessProtoBlock(block *common.Block, validatedBlock *internal.Block) {
-	txsFilter := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+func postprocessProtoBlock(block *unmarshaled.Block, validatedBlock *internal.Block) {
+	txsFilter := util.TxValidationFlags(block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 	for _, tx := range validatedBlock.Txs {
 		txsFilter.SetFlag(tx.IndexInBlock, tx.ValidationCode)
 	}
-	block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsFilter
+	block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsFilter
 }
 
 func addPvtRWSetToPvtUpdateBatch(pvtRWSet *rwsetutil.TxPvtRwSet, pvtUpdateBatch *privacyenabledstate.PvtUpdateBatch, ver *version.Height) {

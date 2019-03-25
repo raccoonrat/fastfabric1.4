@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package kvledger
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"sync"
 	"time"
 
@@ -225,7 +226,7 @@ func (l *kvLedger) GetBlockchainInfo() (*common.BlockchainInfo, error) {
 
 // GetBlockByNumber returns block at a given height
 // blockNumber of  math.MaxUint64 will return last block
-func (l *kvLedger) GetBlockByNumber(blockNumber uint64) (*common.Block, error) {
+func (l *kvLedger) GetBlockByNumber(blockNumber uint64) (*unmarshaled.Block, error) {
 	block, err := l.blockStore.RetrieveBlockByNumber(blockNumber)
 	l.blockAPIsRWLock.RLock()
 	l.blockAPIsRWLock.RUnlock()
@@ -333,7 +334,7 @@ func (l *kvLedger) CommitWithPvtData(pvtdataAndBlock *ledger.BlockAndPvtData) er
 	elapsedCommitWithPvtData := time.Since(startBlockProcessing)
 
 	logger.Infof("[%s] Committed block [%d] with %d transaction(s) in %dms (state_validation=%dms block_commit=%dms state_commit=%dms)",
-		l.ledgerID, block.Header.Number, len(block.Data.Data),
+		l.ledgerID, block.Header.Number, len(block.Raw.Data.Data),
 		elapsedCommitWithPvtData/time.Millisecond,
 		elapsedBlockProcessing/time.Millisecond,
 		elapsedCommitBlockStorage/time.Millisecond,

@@ -4,6 +4,7 @@ import (
 	"github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 )
@@ -15,7 +16,7 @@ func newFsBlockStore(id string, indexConfig *blkstorage.IndexConfig,
 
 type BlockStore struct{}
 
-func (BlockStore) AddBlock(block *common.Block) error {
+func (BlockStore) AddBlock(block *unmarshaled.Block) error {
 	panic("implement me")
 }
 
@@ -31,7 +32,7 @@ func (BlockStore) RetrieveBlockByHash(blockHash []byte) (*common.Block, error) {
 	panic("implement me")
 }
 
-func (BlockStore) RetrieveBlockByNumber(blockNum uint64) (*common.Block, error) {
+func (BlockStore) RetrieveBlockByNumber(blockNum uint64) (*unmarshaled.Block, error) {
 	panic("implement me")
 }
 

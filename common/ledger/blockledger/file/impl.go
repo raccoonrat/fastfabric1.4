@@ -10,6 +10,7 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blockledger"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	cb "github.com/hyperledger/fabric/protos/common"
 	ab "github.com/hyperledger/fabric/protos/orderer"
 )
@@ -25,7 +26,7 @@ type FileLedger struct {
 // FileLedgerBlockStore defines the interface to interact with deliver when using a
 // file ledger
 type FileLedgerBlockStore interface {
-	AddBlock(block *cb.Block) error
+	AddBlock(block *unmarshaled.Block) error
 	GetBlockchainInfo() (*cb.BlockchainInfo, error)
 	RetrieveBlocks(startBlockNumber uint64) (ledger.ResultsIterator, error)
 }
@@ -103,7 +104,7 @@ func (fl *FileLedger) Height() uint64 {
 }
 
 // Append a new block to the ledger
-func (fl *FileLedger) Append(block *cb.Block) error {
+func (fl *FileLedger) Append(block *unmarshaled.Block) error {
 	err := fl.blockStore.AddBlock(block)
 	if err == nil {
 		close(fl.signal)

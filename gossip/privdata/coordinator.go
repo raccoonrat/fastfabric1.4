@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -73,9 +74,11 @@ type TransientStore interface {
 // blocks arrival and in flight transient data, responsible
 // to complete missing parts of transient data for given block.
 type Coordinator interface {
+	ValidateBlock(block *unmarshaled.Block) error
+
 	// StoreBlock deliver new block with underlined private data
 	// returns missing transaction ids
-	StoreBlock(block *common.Block, data util.PvtDataCollections) error
+	StoreBlock(block *unmarshaled.Block, data util.PvtDataCollections) error
 
 	// StorePvtData used to persist private data into transient store
 	StorePvtData(txid string, privData *transientstore2.TxPvtReadWriteSetWithConfigInfo, blckHeight uint64) error
@@ -84,7 +87,7 @@ type Coordinator interface {
 	// the order of private data in slice of PvtDataCollections doesn't implies the order of
 	// transactions in the block related to these private data, to get the correct placement
 	// need to read TxPvtData.SeqInBlock field
-	GetPvtDataAndBlockByNum(seqNum uint64, peerAuth common.SignedData) (*common.Block, util.PvtDataCollections, error)
+	GetPvtDataAndBlockByNum(seqNum uint64, peerAuth common.SignedData) (*unmarshaled.Block, util.PvtDataCollections, error)
 
 	// Get recent block sequence number
 	LedgerHeight() (uint64, error)
@@ -141,9 +144,18 @@ func (c *coordinator) StorePvtData(txID string, privData *transientstore2.TxPvtR
 	return c.TransientStore.PersistWithConfig(txID, blkHeight, privData)
 }
 
+func (c *coordinator) ValidateBlock(block *unmarshaled.Block) error{
+	err := c.Validator.Validate(block)
+	if err != nil {
+		logger.Errorf("Validation failed: %+v", err)
+		return err
+	}
+	return nil
+}
+
 // StoreBlock stores block with private data into the ledger
-func (c *coordinator) StoreBlock(block *common.Block, privateDataSets util.PvtDataCollections) error {
-	if block.Data == nil {
+func (c *coordinator) StoreBlock(block *unmarshaled.Block, privateDataSets util.PvtDataCollections) error {
+	if block.Raw.Data == nil {
 		return errors.New("Block data is empty")
 	}
 	if block.Header == nil {
@@ -153,11 +165,6 @@ func (c *coordinator) StoreBlock(block *common.Block, privateDataSets util.PvtDa
 	logger.Infof("[%s] Received block [%d] from buffer", c.ChainID, block.Header.Number)
 
 	logger.Debugf("[%s] Validating block [%d]", c.ChainID, block.Header.Number)
-	err := c.Validator.Validate(block)
-	if err != nil {
-		logger.Errorf("Validation failed: %+v", err)
-		return err
-	}
 
 	blockAndPvtData := &ledger.BlockAndPvtData{
 		Block:          block,
@@ -171,7 +178,7 @@ func (c *coordinator) StoreBlock(block *common.Block, privateDataSets util.PvtDa
 		return err
 	}
 
-	privateInfo, err := c.listMissingPrivateData(block, ownedRWsets)
+	privateInfo, err := c.listMissingPrivateData(block.Raw, ownedRWsets)
 	if err != nil {
 		logger.Warning(err)
 		return err
@@ -361,27 +368,27 @@ func (c *coordinator) fetchFromTransientStore(txAndSeq txAndSeqInBlock, filter l
 }
 
 // computeOwnedRWsets identifies which block private data we already have
-func computeOwnedRWsets(block *common.Block, blockPvtData util.PvtDataCollections) (rwsetByKeys, error) {
-	lastBlockSeq := len(block.Data.Data) - 1
+func computeOwnedRWsets(block *unmarshaled.Block, blockPvtData util.PvtDataCollections) (rwsetByKeys, error) {
+	lastBlockSeq := len(block.Raw.Data.Data) - 1
 
 	ownedRWsets := make(map[rwSetKey][]byte)
 	for _, txPvtData := range blockPvtData {
 		if lastBlockSeq < int(txPvtData.SeqInBlock) {
-			logger.Warningf("Claimed SeqInBlock %d but block has only %d transactions", txPvtData.SeqInBlock, len(block.Data.Data))
+			logger.Warningf("Claimed SeqInBlock %d but block has only %d transactions", txPvtData.SeqInBlock, len(block.Raw.Data.Data))
 			continue
 		}
-		env, err := utils.GetEnvelopeFromBlock(block.Data.Data[txPvtData.SeqInBlock])
-		if err != nil {
-			return nil, err
+		tx := block.Txs[txPvtData.SeqInBlock]
+		if tx.Envelope.Err != nil {
+			return nil, tx.Envelope.Err
 		}
-		payload, err := utils.GetPayload(env)
-		if err != nil {
-			return nil, err
+		payload := tx.Envelope.Payload
+		if payload.Err != nil {
+			return nil, payload.Err
 		}
 
-		chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
-		if err != nil {
-			return nil, err
+		chdr := payload.Header.ChannelHeader
+		if chdr.Err != nil {
+			return nil, chdr.Err
 		}
 		for _, ns := range txPvtData.WriteSet.NsPvtRwset {
 			for _, col := range ns.CollectionPvtRwset {
@@ -821,14 +828,14 @@ func (ac aggregatedCollections) asPrivateData() []*ledger.TxPvtData {
 // the order of private data in slice of PvtDataCollections doesn't implies the order of
 // transactions in the block related to these private data, to get the correct placement
 // need to read TxPvtData.SeqInBlock field
-func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*common.Block, util.PvtDataCollections, error) {
+func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*unmarshaled.Block, util.PvtDataCollections, error) {
 	blockAndPvtData, err := c.Committer.GetPvtDataAndBlockByNum(seqNum)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	seqs2Namespaces := aggregatedCollections(make(map[seqAndDataModel]map[string][]*rwset.CollectionPvtReadWriteSet))
-	data := blockData(blockAndPvtData.Block.Data.Data)
+	data := blockData(blockAndPvtData.Block.Raw.Data.Data)
 	data.forEachTxn(make(txValidationFlags, len(data)), func(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, _ []*peer.Endorsement) error {
 		item, exists := blockAndPvtData.PvtData[seqInBlock]
 		if !exists {

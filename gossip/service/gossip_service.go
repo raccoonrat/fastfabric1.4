@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package service
 
 import (
-	"github.com/hyperledger/fabric/fastfabric-extensions/mcs"
+	ffgossip "github.com/hyperledger/fabric/fastfabric-extensions/gossip"
 	"sync"
 
 	"github.com/hyperledger/fabric/core/committer"
@@ -22,6 +22,7 @@ import (
 	"github.com/hyperledger/fabric/gossip/integration"
 	privdata2 "github.com/hyperledger/fabric/gossip/privdata"
 	"github.com/hyperledger/fabric/gossip/state"
+	ffstate "github.com/hyperledger/fabric/fastfabric-extensions/state"
 	"github.com/hyperledger/fabric/gossip/util"
 	"github.com/hyperledger/fabric/protos/common"
 	gproto "github.com/hyperledger/fabric/protos/gossip"
@@ -56,14 +57,14 @@ type GossipService interface {
 // DeliveryServiceFactory factory to create and initialize delivery service instance
 type DeliveryServiceFactory interface {
 	// Returns an instance of delivery client
-	Service(g GossipService, endpoints []string, msc mcs.MessageCryptoService) (deliverclient.DeliverService, error)
+	Service(g GossipService, endpoints []string, msc ffgossip.MessageCryptoService) (deliverclient.DeliverService, error)
 }
 
 type deliveryFactoryImpl struct {
 }
 
 // Returns an instance of delivery client
-func (*deliveryFactoryImpl) Service(g GossipService, endpoints []string, mcs mcs.MessageCryptoService) (deliverclient.DeliverService, error) {
+func (*deliveryFactoryImpl) Service(g GossipService, endpoints []string, mcs ffgossip.MessageCryptoService) (deliverclient.DeliverService, error) {
 	return deliverclient.NewDeliverService(&deliverclient.Config{
 		CryptoSvc:   mcs,
 		Gossip:      g,
@@ -93,7 +94,7 @@ type gossipServiceImpl struct {
 	deliveryService map[string]deliverclient.DeliverService
 	deliveryFactory DeliveryServiceFactory
 	lock            sync.RWMutex
-	mcs             mcs.MessageCryptoService
+	mcs             ffgossip.MessageCryptoService
 	peerIdentity    []byte
 	secAdv          api.SecurityAdvisor
 }
@@ -128,7 +129,7 @@ var logger = util.GetLogger(util.ServiceLogger, "")
 
 // InitGossipService initialize gossip service
 func InitGossipService(peerIdentity []byte, endpoint string, s *grpc.Server, certs *gossipCommon.TLSCertificates,
-	mcs mcs.MessageCryptoService, secAdv api.SecurityAdvisor, secureDialOpts api.PeerSecureDialOpts, bootPeers ...string) error {
+	mcs ffgossip.MessageCryptoService, secAdv api.SecurityAdvisor, secureDialOpts api.PeerSecureDialOpts, bootPeers ...string) error {
 	// TODO: Remove this.
 	// TODO: This is a temporary work-around to make the gossip leader election module load its logger at startup
 	// TODO: in order for the flogging package to register this logger in time so it can set the log levels as requested in the config
@@ -140,7 +141,7 @@ func InitGossipService(peerIdentity []byte, endpoint string, s *grpc.Server, cer
 // InitGossipServiceCustomDeliveryFactory initialize gossip service with customize delivery factory
 // implementation, might be useful for testing and mocking purposes
 func InitGossipServiceCustomDeliveryFactory(peerIdentity []byte, endpoint string, s *grpc.Server,
-	certs *gossipCommon.TLSCertificates, factory DeliveryServiceFactory, mcs mcs.MessageCryptoService,
+	certs *gossipCommon.TLSCertificates, factory DeliveryServiceFactory, mcs ffgossip.MessageCryptoService,
 	secAdv api.SecurityAdvisor, secureDialOpts api.PeerSecureDialOpts, bootPeers ...string) error {
 	var err error
 	var gossip gossip.Gossip
@@ -237,14 +238,15 @@ func (g *gossipServiceImpl) InitializeChannel(chainID string, endpoints []string
 	collectionAccessFactory := privdata2.NewCollectionAccessFactory(support.IdDeserializeFactory)
 	fetcher := privdata2.NewPuller(support.Cs, g.gossipSvc, dataRetriever, collectionAccessFactory, chainID)
 
-	coordinator := privdata2.NewCoordinator(privdata2.Support{
+	s := privdata2.Support{
 		ChainID:         chainID,
 		CollectionStore: support.Cs,
 		Validator:       support.Validator,
 		TransientStore:  support.Store,
 		Committer:       support.Committer,
 		Fetcher:         fetcher,
-	}, g.createSelfSignedData())
+	}
+	coordinator := privdata2.NewCoordinator(s, g.createSelfSignedData())
 
 	reconcilerConfig := privdata2.GetReconcilerConfig()
 	var reconciler privdata2.PvtDataReconciler
@@ -263,7 +265,7 @@ func (g *gossipServiceImpl) InitializeChannel(chainID string, endpoints []string
 	}
 	g.privateHandlers[chainID].reconciler.Start()
 
-	g.chains[chainID] = state.NewGossipStateProvider(chainID, servicesAdapter, coordinator)
+	g.chains[chainID] = ffstate.NewGossipStateProvider(chainID, servicesAdapter, coordinator)
 	if g.deliveryService[chainID] == nil {
 		var err error
 		g.deliveryService[chainID], err = g.deliveryFactory.Service(g, endpoints, g.mcs)

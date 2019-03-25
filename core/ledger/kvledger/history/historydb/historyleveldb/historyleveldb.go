@@ -11,13 +11,12 @@ import (
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"github.com/hyperledger/fabric/protos/common"
-	putils "github.com/hyperledger/fabric/protos/utils"
 )
 
 var logger = flogging.MustGetLogger("historyleveldb")
@@ -71,7 +70,7 @@ func (historyDB *historyDB) Close() {
 }
 
 // Commit implements method in HistoryDB interface
-func (historyDB *historyDB) Commit(block *common.Block) error {
+func (historyDB *historyDB) Commit(block *unmarshaled.Block) error {
 
 	blockNo := block.Header.Number
 	//Set the starting tranNo to 0
@@ -80,13 +79,13 @@ func (historyDB *historyDB) Commit(block *common.Block) error {
 	dbBatch := statedb.NewUpdateBatch()
 
 	logger.Debugf("Channel [%s]: Updating history database for blockNo [%v] with [%d] transactions",
-		historyDB.dbName, blockNo, len(block.Data.Data))
+		historyDB.dbName, blockNo, len(block.Txs))
 
 	// Get the invalidation byte array for the block
-	txsFilter := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	txsFilter := util.TxValidationFlags(block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 
 	// write each tran's write set to history db
-	for _, envBytes := range block.Data.Data {
+	for _, tx := range block.Txs {
 
 		// If the tran is marked as invalid, skip it
 		if txsFilter.IsInvalid(int(tranNo)) {
@@ -96,36 +95,36 @@ func (historyDB *historyDB) Commit(block *common.Block) error {
 			continue
 		}
 
-		env, err := putils.GetEnvelopeFromBlock(envBytes)
-		if err != nil {
-			return err
+		env := tx.Envelope
+		if env.Err != nil {
+			return env.Err
 		}
 
-		payload, err := putils.GetPayload(env)
-		if err != nil {
-			return err
+		payload := env.Payload
+		if payload.Err != nil {
+			return payload.Err
 		}
 
-		chdr, err := putils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
-		if err != nil {
-			return err
+		chdr := payload.Header.ChannelHeader
+		if chdr.Err != nil {
+			return chdr.Err
 		}
 
 		if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
 
 			// extract actions from the envelope message
-			respPayload, err := putils.GetActionFromEnvelope(envBytes)
-			if err != nil {
-				return err
+			respPayload := payload.Transaction.Actions[0].Payload.Action.ProposalResponsePayload.Extension
+			if respPayload.Err != nil {
+				return respPayload.Err
 			}
 
 			//preparation for extracting RWSet from transaction
-			txRWSet := &rwsetutil.TxRwSet{}
+			txRWSet := respPayload.Results
 
 			// Get the Result from the Action and then Unmarshal
 			// it into a TxReadWriteSet using custom unmarshalling
-			if err = txRWSet.FromProtoBytes(respPayload.Results); err != nil {
-				return err
+			if txRWSet.Err != nil {
+				return txRWSet.Err
 			}
 			// for each transaction, loop through the namespaces and writesets
 			// and add a history record for each write

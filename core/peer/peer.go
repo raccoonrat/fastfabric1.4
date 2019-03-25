@@ -8,6 +8,7 @@ package peer
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"net"
 	"runtime"
 	"sync"
@@ -214,7 +215,7 @@ func Initialize(init func(string), ccp ccprovider.ChaincodeProvider, sccp sysccp
 	pluginMapper = pm
 	chainInitializer = init
 
-	var cb *common.Block
+	var cb *unmarshaled.Block
 	var ledger ledger.PeerLedger
 	ledgermgmt.Initialize(&ledgermgmt.Initializer{
 		CustomTxProcessors:            ConfigTxProcessors,
@@ -259,7 +260,7 @@ func InitChain(cid string) {
 	}
 }
 
-func getCurrConfigBlockFromLedger(ledger ledger.PeerLedger) (*common.Block, error) {
+func getCurrConfigBlockFromLedger(ledger ledger.PeerLedger) (*unmarshaled.Block, error) {
 	peerLogger.Debugf("Getting config block")
 
 	// get last block.  Last block number is Height-1
@@ -273,7 +274,7 @@ func getCurrConfigBlockFromLedger(ledger ledger.PeerLedger) (*common.Block, erro
 	}
 
 	// get most recent config block location from last block metadata
-	configBlockIndex, err := utils.GetLastConfigIndexFromBlock(lastBlock)
+	configBlockIndex, err := utils.GetLastConfigIndexFromBlock(lastBlock.Raw)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +290,7 @@ func getCurrConfigBlockFromLedger(ledger ledger.PeerLedger) (*common.Block, erro
 }
 
 // createChain creates a new chain object and insert it into the chains
-func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccprovider.ChaincodeProvider, sccp sysccprovider.SystemChaincodeProvider, pm txvalidator.PluginMapper) error {
+func createChain(cid string, ledger ledger.PeerLedger, cb *unmarshaled.Block, ccp ccprovider.ChaincodeProvider, sccp sysccprovider.SystemChaincodeProvider, pm txvalidator.PluginMapper) error {
 	chanConf, err := retrievePersistedChannelConfig(ledger)
 	if err != nil {
 		return err
@@ -305,12 +306,12 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 	} else {
 		// Config was only stored in the statedb starting with v1.1 binaries
 		// so if the config is not found there, extract it manually from the config block
-		envelopeConfig, err := utils.ExtractEnvelope(cb, 0)
-		if err != nil {
+		envelopeConfig := cb.Txs[0].Envelope
+		if envelopeConfig.Err != nil {
 			return err
 		}
 
-		bundle, err = channelconfig.NewBundleFromEnvelope(envelopeConfig)
+		bundle, err = channelconfig.NewBundleFromEnvelope(envelopeConfig.Raw)
 		if err != nil {
 			return err
 		}
@@ -383,12 +384,12 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 		*semaphore.Weighted
 	}{cs, validationWorkersSemaphore}
 	validator := txvalidator.NewTxValidator(cid, vcs, sccp, pm)
-	c := committer.NewLedgerCommitterReactive(ledger, func(block *common.Block) error {
-		chainID, err := utils.GetChainIDFromBlock(block)
-		if err != nil {
-			return err
+	c := committer.NewLedgerCommitterReactive(ledger, func(block *unmarshaled.Block) error {
+		chainID := block.ChannelId
+		if chainID != "" {
+			return fmt.Errorf("No channel id found.")
 		}
-		return SetCurrConfigBlock(block, chainID)
+		return SetCurrConfigBlock(block.Raw, chainID)
 	})
 
 	ordererAddresses := bundle.ChannelConfig().OrdererAddresses()
@@ -418,7 +419,7 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 	defer chains.Unlock()
 	chains.list[cid] = &chain{
 		cs:        cs,
-		cb:        cb,
+		cb:        cb.Raw,
 		committer: c,
 	}
 
@@ -427,17 +428,21 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 
 // CreateChainFromBlock creates a new chain from config block
 func CreateChainFromBlock(cb *common.Block, ccp ccprovider.ChaincodeProvider, sccp sysccprovider.SystemChaincodeProvider) error {
-	cid, err := utils.GetChainIDFromBlock(cb)
-	if err != nil {
-		return err
+	block, err := unmarshaled.NewBlock(cb)
+	if err != nil{
+		return fmt.Errorf("Could not unmarshal block")
+	}
+	cid := block.ChannelId
+	if cid != "" {
+		return fmt.Errorf("No channel id found")
 	}
 
 	var l ledger.PeerLedger
-	if l, err = ledgermgmt.CreateLedger(cb); err != nil {
+	if l, err = ledgermgmt.CreateLedger(block); err != nil {
 		return errors.WithMessage(err, "cannot create ledger from genesis block")
 	}
 
-	return createChain(cid, l, cb, ccp, sccp, pluginMapper)
+	return createChain(cid, l, block, ccp, sccp, pluginMapper)
 }
 
 // GetLedger returns the ledger of the chain with chain ID. Note that this
@@ -746,7 +751,7 @@ type fileLedgerBlockStore struct {
 	ledger.PeerLedger
 }
 
-func (flbs fileLedgerBlockStore) AddBlock(*common.Block) error {
+func (flbs fileLedgerBlockStore) AddBlock(*unmarshaled.Block) error {
 	return nil
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 )
@@ -38,8 +39,8 @@ func newFsBlockStore(id string, conf *Conf, indexConfig *blkstorage.IndexConfig,
 }
 
 // AddBlock adds a new block
-func (store *fsBlockStore) AddBlock(block *common.Block) error {
-	return store.fileMgr.addBlock(block)
+func (store *fsBlockStore) AddBlock(block *unmarshaled.Block) error {
+	return store.fileMgr.addBlock(block.Raw)
 }
 
 // GetBlockchainInfo returns the current info about blockchain
@@ -63,7 +64,7 @@ func (store *fsBlockStore) RetrieveBlockByHash(blockHash []byte) (*common.Block,
 }
 
 // RetrieveBlockByNumber returns the block at a given blockchain height
-func (store *fsBlockStore) RetrieveBlockByNumber(blockNum uint64) (*common.Block, error) {
+func (store *fsBlockStore) RetrieveBlockByNumber(blockNum uint64) (*unmarshaled.Block, error) {
 	return store.fileMgr.retrieveBlockByNumber(blockNum)
 }
 

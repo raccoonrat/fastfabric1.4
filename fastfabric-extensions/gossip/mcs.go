@@ -1,4 +1,4 @@
-package mcs
+package gossip
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/common/util"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaling"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"github.com/hyperledger/fabric/gossip/api"
 	"github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/msp/mgmt"
@@ -22,7 +22,7 @@ type MessageCryptoService interface {
 	// VerifyBlock returns nil if the block is properly signed, and the claimed seqNum is the
 	// sequence number that the block's header contains.
 	// else returns error
-	VerifyBlockByNum(chainID common.ChainID, seqNum uint64) error
+	VerifyUnmarshaledBlock(chainID common.ChainID, uBlock *unmarshaled.Block) error
 }
 
 type MSPMessageCryptoService struct {
@@ -60,66 +60,35 @@ func (m *MSPMessageCryptoService) Expiration(peerIdentity api.PeerIdentityType) 
 	return m.service.Expiration(peerIdentity)
 }
 
-func (m *MSPMessageCryptoService) VerifyBlockByNum(chainID common.ChainID, seqNum uint64) error {
-	// - Convert signedBlock to common.Block.
-	block, err := unmarshaling.Cache.Get(seqNum)
-	if err != nil {
-		return fmt.Errorf("Failed unmarshalling block [%d] bytes on channel [%s]: [%s]", seqNum,  chainID, err)
-	}
-
-	if block.Raw.Header == nil {
-		return fmt.Errorf("Invalid Block on channel [%s]. Header must be different from nil.", chainID)
-	}
-
-	// - Extract channelID and compare with chainID
-	channelID, err := block.GetChannelId()
-	if err != nil {
-		return fmt.Errorf("Failed getting channel id from block with id [%d] on channel [%s]: [%s]", block.Raw.Header.Number, chainID, err)
-	}
-
-	if channelID != string(chainID) {
-		return fmt.Errorf("Invalid block's channel id. Expected [%s]. Given [%s]", chainID, channelID)
-	}
-
-	metadata, err := block.GetMetadata()
-	if err != nil {
-		return fmt.Errorf("Failed unmarshalling medatata for signatures [%s]", err)
-	}
-
-	// - Verify that Header.DataHash is equal to the hash of block.Data
-	// This is to ensure that the header is consistent with the data carried by this block
-	if err = block.VerifyHash(); err != nil {
-		return err
+func (m *MSPMessageCryptoService) VerifyUnmarshaledBlock(chainID common.ChainID,  block *unmarshaled.Block) error {
+	if block.ChannelId != string(chainID) {
+		return fmt.Errorf("Invalid block's channel id. Expected [%s]. Given [%s]", chainID, block.ChannelId)
 	}
 
 	// - Get Policy for block validation
 
 	// Get the policy manager for channelID
-	cpm, ok := m.channelPolicyManagerGetter.Manager(channelID)
+	cpm, ok := m.channelPolicyManagerGetter.Manager(block.ChannelId)
 	if cpm == nil {
-		return fmt.Errorf("Could not acquire policy manager for channel %s", channelID)
+		return fmt.Errorf("Could not acquire policy manager for channel %s", block.ChannelId)
 	}
 	// ok is true if it was the manager requested, or false if it is the default manager
-	mcsLogger.Debugf("Got policy manager for channel [%s] with flag [%t]", channelID, ok)
+	mcsLogger.Debugf("Got policy manager for channel [%s] with flag [%t]", block.ChannelId, ok)
 
 	// Get block validation policy
 	policy, ok := cpm.GetPolicy(policies.BlockValidation)
 	// ok is true if it was the policy requested, or false if it is the default policy
-	mcsLogger.Debugf("Got block validation policy for channel [%s] with flag [%t]", channelID, ok)
+	mcsLogger.Debugf("Got block validation policy for channel [%s] with flag [%t]", block.ChannelId, ok)
 
 	// - Prepare SignedData
 	signatureSet := []*pcommon.SignedData{}
-	signatureHeaders, err := block.GetSignatureHeaders()
-	if err != nil {
-		return fmt.Errorf("Failed unmarshalling signature header for block with id [%d] on channel [%s]: [%s]", block.Raw.Header.Number, chainID, err)
-	}
-	for i, shdr := range signatureHeaders{
+	for i, sig := range block.Metadata.Signatures{
 		signatureSet = append(
 			signatureSet,
 			&pcommon.SignedData{
-				Identity:  shdr.Creator,
-				Data:      util.ConcatenateBytes(metadata.Value, metadata.Signatures[i].SignatureHeader, block.Raw.Header.Bytes()),
-				Signature: metadata.Signatures[i].Signature,
+				Identity:  sig.SignatureHeader.Creator,
+				Data:      util.ConcatenateBytes(block.Metadata.Value, block.Metadata.Signatures[i].MetadataSignature.SignatureHeader, block.Header.Bytes()),
+				Signature: sig.Signature,
 			},
 		)
 	}

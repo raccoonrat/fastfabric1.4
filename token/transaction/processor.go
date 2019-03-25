@@ -8,10 +8,10 @@ package transaction
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/protos/common"
 	"github.com/pkg/errors"
 )
 
@@ -23,9 +23,9 @@ type Processor struct {
 	TMSManager TMSManager
 }
 
-func (p *Processor) GenerateSimulationResults(txEnv *common.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
+func (p *Processor) GenerateSimulationResults(txEnv *unmarshaled.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
 	// Extract channel header and token transaction
-	ch, ttx, ci, err := UnmarshalTokenTransaction(txEnv.Payload)
+	ch, ttx, ci, err := UnmarshalTokenTransaction(txEnv.Raw.Payload)
 	if err != nil {
 		return errors.WithMessage(err, "failed unmarshalling token transaction")
 	}

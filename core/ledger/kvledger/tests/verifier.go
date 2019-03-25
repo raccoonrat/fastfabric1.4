@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package tests
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -123,11 +124,11 @@ type retrievedBlockAndPvtdata struct {
 func (r *retrievedBlockAndPvtdata) sameAs(expectedBlockAndPvtdata *ledger.BlockAndPvtData) {
 	r.samePvtdata(expectedBlockAndPvtdata.PvtData)
 	r.sameBlockHeaderAndData(expectedBlockAndPvtdata.Block)
-	r.sameMetadata(expectedBlockAndPvtdata.Block)
+	r.sameMetadata(expectedBlockAndPvtdata.Block.Raw)
 }
 
 func (r *retrievedBlockAndPvtdata) hasNumTx(numTx int) {
-	r.assert.Len(r.Block.Data.Data, numTx)
+	r.assert.Len(r.Block.Raw.Data.Data, numTx)
 }
 
 func (r *retrievedBlockAndPvtdata) hasNoPvtdata() {
@@ -162,15 +163,15 @@ func (r *retrievedBlockAndPvtdata) pvtdataShouldNotContain(ns, coll string) {
 	}
 }
 
-func (r *retrievedBlockAndPvtdata) sameBlockHeaderAndData(expectedBlock *common.Block) {
-	r.assert.True(proto.Equal(expectedBlock.Data, r.BlockAndPvtData.Block.Data))
-	r.assert.True(proto.Equal(expectedBlock.Header, r.BlockAndPvtData.Block.Header))
+func (r *retrievedBlockAndPvtdata) sameBlockHeaderAndData(expectedBlock *unmarshaled.Block) {
+	r.assert.True(proto.Equal(expectedBlock.Raw.Data, r.BlockAndPvtData.Block.Raw.Data))
+	r.assert.True(proto.Equal(expectedBlock.Raw.Header, r.BlockAndPvtData.Block.Header))
 }
 
 func (r *retrievedBlockAndPvtdata) sameMetadata(expectedBlock *common.Block) {
 	// marshalling/unmarshalling treats a nil byte and empty byte interchangeably (based on which scheme is chosen proto vs gob)
 	// so explicitly comparing each metadata
-	retrievedMetadata := r.Block.Metadata.Metadata
+	retrievedMetadata := r.Block.Raw.Metadata.Metadata
 	expectedMetadata := expectedBlock.Metadata.Metadata
 	r.assert.Equal(len(expectedMetadata), len(retrievedMetadata))
 	for i := 0; i < len(retrievedMetadata); i++ {
@@ -182,7 +183,7 @@ func (r *retrievedBlockAndPvtdata) sameMetadata(expectedBlock *common.Block) {
 
 func (r *retrievedBlockAndPvtdata) containsValidationCode(txSeq int, validationCode protopeer.TxValidationCode) {
 	var txFilter lgrutil.TxValidationFlags
-	txFilter = r.BlockAndPvtData.Block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER]
+	txFilter = r.BlockAndPvtData.Block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER]
 	r.assert.Equal(validationCode, txFilter.Flag(txSeq))
 }
 

@@ -7,6 +7,7 @@ package lockbasedtxmgr
 
 import (
 	"bytes"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -22,7 +23,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/core/ledger/pvtdatapolicy"
 	"github.com/hyperledger/fabric/core/ledger/util"
-	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 )
@@ -44,7 +44,7 @@ type LockBasedTxMgr struct {
 }
 
 type current struct {
-	block     *common.Block
+	block     *unmarshaled.Block
 	batch     *privacyenabledstate.UpdateBatch
 	listeners []ledger.StateListener
 }
@@ -54,7 +54,7 @@ func (c *current) blockNum() uint64 {
 }
 
 func (c *current) maxTxNumber() uint64 {
-	return uint64(len(c.block.Data.Data)) - 1
+	return uint64(len(c.block.Txs)) - 1
 }
 
 // NewLockBasedTxMgr constructs a new instance of NewLockBasedTxMgr
@@ -121,7 +121,7 @@ func (txmgr *LockBasedTxMgr) ValidateAndPrepare(blockAndPvtdata *ledger.BlockAnd
 	logger.Debug("lock acquired on oldBlockCommit for validating read set version against the committed version")
 
 	block := blockAndPvtdata.Block
-	logger.Debugf("Validating new block with num trans = [%d]", len(block.Data.Data))
+	logger.Debugf("Validating new block with num trans = [%d]", len(block.Raw.Data.Data))
 	batch, txstatsInfo, err := txmgr.validator.ValidateAndPrepareBatch(blockAndPvtdata, doMVCCValidation)
 	if err != nil {
 		txmgr.reset()

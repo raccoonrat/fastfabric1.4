@@ -120,6 +120,7 @@ func (bh *Handler) process(messages chan *cb.Envelope, resps chan chan *ab.Broad
 		resps <- done
 		go func() { done <- bh.ProcessMessage(msg, addr) }()
 	}
+
 }
 
 type MetricsTracker struct {

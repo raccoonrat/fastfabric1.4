@@ -9,6 +9,7 @@ package ledgerstorage
 import (
 	fffsblkstorage "github.com/hyperledger/fabric/fastfabric-extensions/fsblkstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"sync"
 
 	"github.com/hyperledger/fabric/common/flogging"
@@ -153,8 +154,8 @@ func constructValidTxPvtDataAndMissingData(blockAndPvtData *ledger.BlockAndPvtDa
 	var validTxPvtData []*ledger.TxPvtData
 	validTxMissingPvtData := make(ledger.TxMissingPvtDataMap)
 
-	txsFilter := lutil.TxValidationFlags(blockAndPvtData.Block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
-	numTxs := uint64(len(blockAndPvtData.Block.Data.Data))
+	txsFilter := lutil.TxValidationFlags(blockAndPvtData.Block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	numTxs := uint64(len(blockAndPvtData.Block.Txs))
 
 	// for all valid tx, construct pvtdata and missing pvtdata list
 	for txNum := uint64(0); txNum < numTxs; txNum++ {
@@ -191,7 +192,7 @@ func (s *Store) GetPvtDataAndBlockByNum(blockNum uint64, filter ledger.PvtNsColl
 	s.rwlock.RLock()
 	defer s.rwlock.RUnlock()
 
-	var block *common.Block
+	var block *unmarshaled.Block
 	var pvtdata []*ledger.TxPvtData
 	var err error
 	if block, err = s.RetrieveBlockByNumber(blockNum); err != nil {

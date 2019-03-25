@@ -8,6 +8,7 @@ package state
 
 import (
 	"bytes"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -92,7 +93,7 @@ type MCSAdapter interface {
 type ledgerResources interface {
 	// StoreBlock deliver new block with underlined private data
 	// returns missing transaction ids
-	StoreBlock(block *common.Block, data util.PvtDataCollections) error
+	StoreBlock(block *unmarshaled.Block, data util.PvtDataCollections) error
 
 	// StorePvtData used to persist private date into transient store
 	StorePvtData(txid string, privData *transientstore.TxPvtReadWriteSetWithConfigInfo, blckHeight uint64) error
@@ -101,7 +102,7 @@ type ledgerResources interface {
 	// the order of private data in slice of PvtDataCollections doesn't imply the order of
 	// transactions in the block related to these private data, to get the correct placement
 	// need to read TxPvtData.SeqInBlock field
-	GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*common.Block, util.PvtDataCollections, error)
+	GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*unmarshaled.Block, util.PvtDataCollections, error)
 
 	// Get recent block sequence number
 	LedgerHeight() (uint64, error)
@@ -235,8 +236,10 @@ func NewGossipStateProvider(chainID string, services *ServicesMediator, ledger l
 
 	// Listen for incoming communication
 	go s.listen()
+
+	//deliverPayloads is done in fastfabric extension
 	// Deliver in order messages into the incoming channel
-	go s.deliverPayloads()
+	//go s.deliverPayloads()
 	// Execute anti entropy to fill missing gaps
 	go s.antiEntropy()
 	// Taking care of state request messages
@@ -427,7 +430,7 @@ func (s *GossipStateProviderImpl) handleStateRequest(msg proto.ReceivedMessage) 
 			continue
 		}
 
-		blockBytes, err := pb.Marshal(block)
+		blockBytes, err := pb.Marshal(block.Raw)
 
 		if err != nil {
 			logger.Errorf("Could not marshal block: %+v", errors.WithStack(err))
@@ -539,12 +542,19 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
 					continue
 				}
+				block, err := unmarshaled.NewBlock(rawBlock)
+				if err != nil {
+					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
+					continue
+				}
+
 				if rawBlock.Data == nil || rawBlock.Header == nil {
 					logger.Errorf("Block with claimed sequence %d has no header (%v) or data (%v)",
 						payload.SeqNum, rawBlock.Header, rawBlock.Data)
 					continue
 				}
 				logger.Debugf("[%s] Transferring block [%d] with %d transaction(s) to the ledger", s.chainID, payload.SeqNum, len(rawBlock.Data.Data))
+
 
 				// Read all private data into slice
 				var p util.PvtDataCollections
@@ -555,7 +565,7 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 						continue
 					}
 				}
-				if err := s.commitBlock(rawBlock, p); err != nil {
+				if err := s.commitBlock(block, p); err != nil {
 					if executionErr, isExecutionErr := err.(*vsccErrors.VSCCExecutionFailureError); isExecutionErr {
 						logger.Errorf("Failed executing VSCC due to %v. Aborting chain processing", executionErr)
 						return
@@ -765,7 +775,7 @@ func (s *GossipStateProviderImpl) addPayload(payload *proto.Payload, blockingMod
 	return nil
 }
 
-func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.PvtDataCollections) error {
+func (s *GossipStateProviderImpl) commitBlock(block *unmarshaled.Block, pvtData util.PvtDataCollections) error {
 
 	// Commit block with available private transactions
 	if err := s.ledger.StoreBlock(block, pvtData); err != nil {
@@ -776,7 +786,7 @@ func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.
 	// Update ledger height
 	s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
 	logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
-		s.chainID, block.Header.Number, len(block.Data.Data))
+		s.chainID, block.Header.Number, len(block.Txs))
 
 	return nil
 }

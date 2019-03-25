@@ -9,6 +9,7 @@ package kvledger
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -20,8 +21,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
-	"github.com/hyperledger/fabric/protos/common"
-	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/pkg/errors"
 )
 
@@ -98,10 +97,10 @@ func (provider *Provider) Initialize(initializer *ledger.Initializer) error {
 // upon a successful ledger creation with the committed genesis block, removes the flag and add entry into
 // created ledgers list (atomically). If a crash happens in between, the 'recoverUnderConstructionLedger'
 // function is invoked before declaring the provider to be usable
-func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger, error) {
-	ledgerID, err := utils.GetChainIDFromBlock(genesisBlock)
-	if err != nil {
-		return nil, err
+func (provider *Provider) Create(genesisBlock *unmarshaled.Block) (ledger.PeerLedger, error) {
+	ledgerID := genesisBlock.ChannelId
+	if ledgerID == "" {
+		return nil, fmt.Errorf("No channelId in genesis block")
 	}
 	exists, err := provider.idStore.ledgerIDExists(ledgerID)
 	if err != nil {
@@ -284,7 +283,7 @@ func (s *idStore) getUnderConstructionFlag() (string, error) {
 	return string(val), nil
 }
 
-func (s *idStore) createLedgerID(ledgerID string, gb *common.Block) error {
+func (s *idStore) createLedgerID(ledgerID string, gb *unmarshaled.Block) error {
 	key := s.encodeLedgerKey(ledgerID)
 	var val []byte
 	var err error
@@ -294,7 +293,7 @@ func (s *idStore) createLedgerID(ledgerID string, gb *common.Block) error {
 	if val != nil {
 		return ErrLedgerIDExists
 	}
-	if val, err = proto.Marshal(gb); err != nil {
+	if val, err = proto.Marshal(gb.Raw); err != nil {
 		return err
 	}
 	batch := statedb.NewUpdateBatch()

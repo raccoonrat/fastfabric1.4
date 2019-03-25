@@ -10,7 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/mcs"
+	"github.com/hyperledger/fabric/fastfabric-extensions/gossip"
 	"math"
 	"sync"
 	"time"
@@ -88,7 +88,7 @@ type Config struct {
 	ABCFactory func(*grpc.ClientConn) orderer.AtomicBroadcastClient
 	// CryptoSvc performs cryptographic actions like message verification and signing
 	// and identity validation
-	CryptoSvc mcs.MessageCryptoService
+	CryptoSvc gossip.MessageCryptoService
 	// Gossip enables to enumerate peers in the channel, send a message to peers,
 	// and add a block to the gossip state transfer layer
 	Gossip blocksprovider.GossipServiceAdapter

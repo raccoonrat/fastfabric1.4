@@ -8,9 +8,9 @@ package blocksprovider
 
 import (
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
-	"github.com/hyperledger/fabric/fastfabric-extensions/mcs"
-	"github.com/hyperledger/fabric/fastfabric-extensions/pipeline"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaling"
+	"github.com/hyperledger/fabric/fastfabric-extensions/gossip"
+	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
+	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
 	"math"
 	"sync/atomic"
 	"time"
@@ -95,7 +95,7 @@ type blocksProviderImpl struct {
 
 	gossip GossipServiceAdapter
 
-	mcs mcs.MessageCryptoService
+	mcs gossip.MessageCryptoService
 
 	done int32
 
@@ -108,7 +108,7 @@ var maxRetryDelay = time.Second * 10
 var logger = flogging.MustGetLogger("blocksProvider")
 
 // NewBlocksProvider constructor function to create blocks deliverer instance
-func NewBlocksProvider(chainID string, client streamClient, gossip GossipServiceAdapter, mcs mcs.MessageCryptoService) BlocksProvider {
+func NewBlocksProvider(chainID string, client streamClient, gossip GossipServiceAdapter, mcs gossip.MessageCryptoService) BlocksProvider {
 	return &blocksProviderImpl{
 		chainID:              chainID,
 		client:               client,
@@ -124,7 +124,7 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 	errorStatusCounter := 0
 	statusCounter := 0
 	defer b.client.Close()
-	defer close(pipeline.ValidatedBlockNums)
+	defer close(parallel.ReadyForValidation)
 
 	messages := make(chan *orderer.DeliverResponse, config.BlockPipelineWidth)
 	go b.receive(messages)
@@ -161,10 +161,10 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 		case *orderer.DeliverResponse_Block:
 			errorStatusCounter = 0
 			statusCounter = 0
-			blockNum := t.Block.Header.Number
-			unmarshaling.Cache.Put(t.Block)
 
-			go b.processBlock(blockNum)
+			commitPromise := make(chan *unmarshaled.Block, 1)
+			go b.processBlock(t.Block, commitPromise)
+			parallel.ReadyToCommit <- commitPromise
 
 
 		default:
@@ -186,35 +186,42 @@ func (b *blocksProviderImpl) receive(messages chan *orderer.DeliverResponse) {
 	}
 }
 
-func (b *blocksProviderImpl) processBlock(blockNum uint64) {
-	done := make(chan uint64)
-	b.verify(blockNum, done)
-	for verifiedBlockNum := range done{
-		pipeline.ValidatedBlockNums <- verifiedBlockNum
-		b.gossipBlock(verifiedBlockNum)
+func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise chan *unmarshaled.Block) {
+	done := make(chan *unmarshaled.Block)
+	b.verify(block, done)
+
+	success := false
+	//if done is closed without successful verification, then the loop will not be executed
+	for verifiedBlock := range done{
+		parallel.ReadyForValidation <- &parallel.Pipeline{commitPromise, verifiedBlock}
+		success = true
+		b.gossipBlock(block)
+	}
+
+	if !success{
+		close(commitPromise)
 	}
 }
 
-func (b *blocksProviderImpl) verify(blockNum uint64, done chan uint64){
+func (b *blocksProviderImpl) verify(block *common.Block, done chan *unmarshaled.Block){
 	defer close(done)
-	if err := b.mcs.VerifyBlockByNum(gossipcommon.ChainID(b.chainID), blockNum); err != nil {
-		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, blockNum, err)
+	uBlock, err := unmarshaled.NewBlock(block)
+	if err != nil {
+		logger.Warning("Failed unmarshalling block bytes on channel [%s]: [%s]",  b.chainID, err)
+	}
+	if err := b.mcs.VerifyUnmarshaledBlock(gossipcommon.ChainID(b.chainID), uBlock); err != nil {
+		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, uBlock.Raw.Header.Number, err)
 		return
 	}
 
-	done <- blockNum
+	done <- uBlock
 }
 
-func (b *blocksProviderImpl) gossipBlock(blockNum uint64) {
-	uBlock, err := unmarshaling.Cache.Get(blockNum)
+func (b *blocksProviderImpl) gossipBlock(block *common.Block) {
+	marshaledBlock, err := proto.Marshal(block)
+	blockNum := block.Header.Number
 	if err != nil {
-		logger.Errorf("[%s] Error getting block with sequence number %d from cache, due to %s", b.chainID, blockNum, err)
-		return
-	}
-
-	marshaledBlock, err := proto.Marshal(uBlock.Raw)
-	if err != nil {
-		logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID, blockNum, err)
+		logger.Errorf("[%s] Error serializing block with sequence number %d, due to %s", b.chainID,blockNum , err)
 		return
 	}
 
