@@ -8,6 +8,7 @@ package cscc
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/gossip"
 	"os"
 	"testing"
 	"time"
@@ -44,7 +45,6 @@ import (
 	"github.com/hyperledger/fabric/core/policy"
 	policymocks "github.com/hyperledger/fabric/core/policy/mocks"
 	"github.com/hyperledger/fabric/core/scc/cscc/mock"
-	"github.com/hyperledger/fabric/gossip/api"
 	"github.com/hyperledger/fabric/gossip/service"
 	"github.com/hyperledger/fabric/msp/mgmt"
 	"github.com/hyperledger/fabric/msp/mgmt/testtools"
@@ -100,7 +100,7 @@ func (*mockDeliveryClient) Stop() {
 type mockDeliveryClientFactory struct {
 }
 
-func (*mockDeliveryClientFactory) Service(g service.GossipService, endpoints []string, mcs api.MessageCryptoService) (deliverclient.DeliverService, error) {
+func (*mockDeliveryClientFactory) Service(g service.GossipService, endpoints []string, mcs gossip.MessageCryptoService) (deliverclient.DeliverService, error) {
 	return &mockDeliveryClient{}, nil
 }
 
@@ -313,7 +313,11 @@ func TestConfigerInvokeJoinChainCorrectParams(t *testing.T) {
 
 	// Query the configuration block
 	//chainID := []byte{143, 222, 22, 192, 73, 145, 76, 110, 167, 154, 118, 66, 132, 204, 113, 168}
-	chainID, err := utils.GetChainIDFromBlockBytes(blockBytes)
+	b, err := utils.GetBlockFromBlockBytes(blockBytes)
+	if err != nil {
+		t.Fatalf("cscc invoke JoinChain failed with: %v", err)
+	}
+	chainID, err := utils.GetChainIDFromBlock(b)
 	if err != nil {
 		t.Fatalf("cscc invoke JoinChain failed with: %v", err)
 	}

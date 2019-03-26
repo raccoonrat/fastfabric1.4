@@ -10,73 +10,163 @@ import (
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
+	"github.com/pkg/errors"
 )
 
-const MAXCACHEINDEX = 1023
-
 type Block struct {
-    Raw *common.Block
-	ChannelId 	string
-	sigs      	[]*common.SignatureHeader
-	sigsErr   	error
-	Txs       	[]*Tx
-	Metadata    *Metadata
-    Header		*common.BlockHeader
+	Raw      *common.Block
+	Header   *common.BlockHeader
+	data     *Transactions
+	metadata *BlockMetadata
 }
 
-type Metadata struct{
-	Raw *common.BlockMetadata
-	*common.Metadata
+type Transactions struct {
+	*common.BlockData
+	unmarshaled []bool
+	txs	[]*Tx
+}
+
+type BlockMetadata struct {
+	Raw         *common.BlockMetadata
+	Metadata    []*Metadata
+	initialized []bool
+}
+
+type Metadata struct {
 	Signatures []*MetadataSignature
+	Raw        *common.Metadata
 }
 
 type MetadataSignature struct {
 	*common.MetadataSignature
-	SignatureHeader  *common.SignatureHeader
+	signatureHeader  *common.SignatureHeader
 }
 
-func NewBlock(raw *common.Block) (*Block, error) {
-	if raw == nil || raw.Data == nil || raw.Data.Data == nil{
-		return nil, fmt.Errorf("There is no content in this block.")
+func GetBlock(raw *common.Block) (*Block, error) {
+	if raw == nil {
+		return nil, fmt.Errorf("Block must not be nil.")
 	}
 	if raw.Header == nil {
 		return nil, fmt.Errorf("Block [%d] header is nil.", raw.Header)
 	}
-	block := &Block{Raw:raw, Header:raw.Header}
-	var err error
-	metadata, err := utils.GetMetadataFromBlock(raw, common.BlockMetadataIndex_SIGNATURES);
-	if err != nil{
-		return nil, err
-	}
-	block.Metadata = &Metadata{Metadata: metadata}
-	if metadata.Signatures == nil {
-		return nil, fmt.Errorf("Block [%d] metadata signatures is nil.", raw.Header)
+
+	if !bytes.Equal(raw.Data.Hash(), raw.Header.DataHash ) {
+		return nil, fmt.Errorf("Header.DataHash is different from Hash(block.Data) for block with id [%d]", raw.Header.Number)
 	}
 
-	block.Metadata.Signatures = make([]*MetadataSignature,len(metadata.Signatures))
-	for i,sig := range metadata.Signatures {
-		block.Metadata.Signatures[i] = &MetadataSignature{MetadataSignature: sig}
-		sh, err := utils.GetSignatureHeader(sig.SignatureHeader)
+	return &Block{
+		Raw: raw,
+		Header: raw.Header}, nil
+}
+
+func (b *Block) UnmarshalAllMetadata() (*BlockMetadata, error) {
+	if b.metadata == nil{
+		b.metadata = newBlockMetadata(b.Raw.Metadata)
+	}
+	for i, m := range b.metadata.Metadata {
+		if m == nil {
+			um, e := b.UnmarshalSpecificMetadata(common.BlockMetadataIndex(i))
+			if e != nil{
+				return nil, e
+			}
+			for _, s:=range um.Signatures {
+				_, e = s.UnmarshalSignatureHeader()
+				if e != nil{
+					return nil, e
+				}
+			}
+		}
+	}
+	return b.metadata, nil
+}
+
+func (b *Block) UnmarshalSpecificMetadata(index common.BlockMetadataIndex) (*Metadata, error) {
+	if b.metadata.initialized[index]{
+		return b.metadata.Metadata[index], nil
+	}
+	md := &common.Metadata{}
+	err := proto.Unmarshal(b.Raw.Metadata.Metadata[index], md)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error unmarshaling metadata from block at index [%s]", index)
+	}
+	newMd := newMetadata(md)
+	b.metadata.Metadata[index] = newMd
+	return newMd, nil
+}
+
+func (b *Block) GetChannelId()(string, error) {
+	tx, err := b.data.unmarshalSpecificTx(0)
+	if err != nil {
+		return "", err
+	}
+	return tx.GetChannelId()
+}
+
+func (b *Block) UnmarshalAll() error {
+	panic("implement me")
+}
+
+
+func (sig *MetadataSignature) UnmarshalSignatureHeader() (*common.SignatureHeader,error) {
+	if sig.signatureHeader != nil {
+		return sig.signatureHeader, nil
+	}
+
+	sh := &common.SignatureHeader{}
+	err := proto.Unmarshal(sig.SignatureHeader, sh)
+	if err != nil {
+		return nil, errors.Wrap(err, "error unmarshaling SignatureHeader")
+	}
+	sig.signatureHeader = sh
+	return sh, nil
+}
+
+func (block *Block) UnmarshalTransactions() ([]*Tx, error){
+	if block.data == nil {
+		block.data = newData(block.Raw.Data)
+	}
+	for i, _ := range block.data.Data {
+		_, err := block.data.unmarshalSpecificTx(i)
 		if err != nil {
 			return nil, err
 		}
-		block.Metadata.Signatures[i].SignatureHeader = sh
 	}
 
-	block.Txs = make([]*Tx, len(raw.Data.Data))
-	for idx, data := range raw.Data.Data {
-		block.Txs[idx] = unmarshalTx(data)
+	return block.data.txs, nil
+}
+
+func (data Transactions) unmarshalSpecificTx(index int) (*Tx, error) {
+	if data.txs[index] != nil {
+		return data.txs[index], nil
 	}
 
-	if len(block.Txs) != 0{
-		block.ChannelId = block.Txs[0].ChannelId
+	panic("implement me")
+}
+
+func newData(data *common.BlockData) *Transactions {
+	return &Transactions{
+		BlockData:data,
+		txs: make([]*Tx, len(data.Data)),
+		unmarshaled:make([]bool, len(data.Data))}
+}
+
+func newBlockMetadata(metadata *common.BlockMetadata) *BlockMetadata {
+	return &BlockMetadata{
+		Raw: metadata,
+		Metadata:make([]*Metadata, len(metadata.Metadata)),
+		initialized:make([]bool, len(metadata.Metadata))}
+}
+
+func newMetadata(metadata *common.Metadata) *Metadata {
+	md := &Metadata{
+		Raw:        metadata,
+		Signatures: make([]*MetadataSignature, len(metadata.Signatures)),
 	}
 
-	if !bytes.Equal(raw.Data.Hash(), raw.Header.DataHash ) {
-		return nil, fmt.Errorf("Header.DataHash is different from Hash(block.Data) for block with id [%d] on channel [%s]", raw.Header.Number, block.ChannelId)
+	for i, s := range metadata.Signatures {
+		md.Signatures[i] = &MetadataSignature{MetadataSignature:s}
 	}
-
-	return block, nil
+	return md
 }
 
 func NewHeader(hdr *common.Header) (*Header, error){
@@ -160,7 +250,7 @@ func unmarshalTx(data []byte) *Tx {
 	if err != nil{
 		return tx
 	}
-	tx.ChannelId = pl.Header.ChannelHeader.ChannelId
+	tx.channelId = pl.Header.ChannelHeader.ChannelId
 
 	pl.Transaction.Raw, pl.Transaction.Err = utils.GetTransaction(pl.Raw.Data)
 	if pl.Transaction.Err != nil{
@@ -295,7 +385,11 @@ func unmarshalChaincodeEndorsedAction(payload *ChaincodeActionPayload) *Chaincod
 type Tx struct {
 	Data []byte
 	Envelope *Envelope
-	ChannelId     string
+}
+
+func (tx *Tx) GetChannelId() (string, error) {
+	tx.Envelope.Payload.Header.ChannelHeader.Unmarshal()
+	return tx.Envelope.Payload.Header.ChannelHeader.ChannelId, tx.Envelope.Payload.Header.ChannelHeader.Err
 }
 
 type Envelope struct {
@@ -313,6 +407,11 @@ type ChannelHeader struct {
 	*common.ChannelHeader
 	Extension	*ChaincodeHeaderExtension
 	Err	error
+	ChannelId string
+}
+
+func (header *ChannelHeader) Unmarshal() {
+
 }
 
 type SignatureHeader struct {
