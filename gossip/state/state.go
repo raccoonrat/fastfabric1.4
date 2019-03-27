@@ -8,7 +8,7 @@ package state
 
 import (
 	"bytes"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -93,7 +93,7 @@ type MCSAdapter interface {
 type ledgerResources interface {
 	// StoreBlock deliver new block with underlined private data
 	// returns missing transaction ids
-	StoreBlock(block *unmarshaled.Block, data util.PvtDataCollections) error
+	StoreBlock(block *cached.Block, data util.PvtDataCollections) error
 
 	// StorePvtData used to persist private date into transient store
 	StorePvtData(txid string, privData *transientstore.TxPvtReadWriteSetWithConfigInfo, blckHeight uint64) error
@@ -102,7 +102,7 @@ type ledgerResources interface {
 	// the order of private data in slice of PvtDataCollections doesn't imply the order of
 	// transactions in the block related to these private data, to get the correct placement
 	// need to read TxPvtData.SeqInBlock field
-	GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*unmarshaled.Block, util.PvtDataCollections, error)
+	GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*cached.Block, util.PvtDataCollections, error)
 
 	// Get recent block sequence number
 	LedgerHeight() (uint64, error)
@@ -542,7 +542,7 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
 					continue
 				}
-				block, err := unmarshaled.NewBlock(rawBlock)
+				block, err := cached.NewBlock(rawBlock)
 				if err != nil {
 					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
 					continue
@@ -775,7 +775,7 @@ func (s *GossipStateProviderImpl) addPayload(payload *proto.Payload, blockingMod
 	return nil
 }
 
-func (s *GossipStateProviderImpl) commitBlock(block *unmarshaled.Block, pvtData util.PvtDataCollections) error {
+func (s *GossipStateProviderImpl) commitBlock(block *cached.Block, pvtData util.PvtDataCollections) error {
 
 	// Commit block with available private transactions
 	if err := s.ledger.StoreBlock(block, pvtData); err != nil {

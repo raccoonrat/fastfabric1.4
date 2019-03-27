@@ -9,7 +9,7 @@ package blkstorage
 import (
 	"github.com/hyperledger/fabric/common/ledger"
 	l "github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/pkg/errors"
@@ -58,7 +58,7 @@ type BlockStore interface {
 	GetBlockchainInfo() (*common.BlockchainInfo, error)
 	RetrieveBlocks(startNum uint64) (ledger.ResultsIterator, error)
 	RetrieveBlockByHash(blockHash []byte) (*common.Block, error)
-	RetrieveBlockByNumber(blockNum uint64) (*unmarshaled.Block, error) // blockNum of  math.MaxUint64 will return last block
+	RetrieveBlockByNumber(blockNum uint64) (*cached.Block, error) // blockNum of  math.MaxUint64 will return last block
 	RetrieveTxByID(txID string) (*common.Envelope, error)
 	RetrieveTxByBlockNumTranNum(blockNum uint64, tranNum uint64) (*common.Envelope, error)
 	RetrieveBlockByTxID(txID string) (*common.Block, error)

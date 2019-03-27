@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package tests
 
 import (
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -54,7 +54,7 @@ func (c *committer) copyOfBlockAndPvtdata(blk *ledger.BlockAndPvtData) *ledger.B
 	c.assert.NoError(err)
 	blkCopy := &common.Block{}
 	c.assert.NoError(proto.Unmarshal(blkBytes, blkCopy))
-	bcopy,_ := unmarshaled.NewBlock(blkCopy)
+	bcopy,_ := cached.NewBlock(blkCopy)
 	return &ledger.BlockAndPvtData{Block: bcopy, PvtData: blk.PvtData,
 		MissingPvtData: blk.MissingPvtData}
 }
@@ -93,7 +93,7 @@ func (g *blkGenerator) nextBlockAndPvtdata(trans ...*txAndPvtdata) *ledger.Block
 	g.lastNum++
 	g.lastHash = block.Header.Hash()
 	setBlockFlagsToValid(block)
-	b,_ := unmarshaled.NewBlock(block)
+	b,_ := cached.NewBlock(block)
 	return &ledger.BlockAndPvtData{Block: b, PvtData: blockPvtdata,
 		MissingPvtData: make(ledger.TxMissingPvtDataMap)}
 }

@@ -9,7 +9,7 @@ package committer
 import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/pkg/errors"
 )
@@ -34,7 +34,7 @@ type PeerLedgerSupport interface {
 
 	GetBlockchainInfo() (*common.BlockchainInfo, error)
 
-	GetBlockByNumber(blockNumber uint64) (*unmarshaled.Block, error)
+	GetBlockByNumber(blockNumber uint64) (*cached.Block, error)
 
 	GetConfigHistoryRetriever() (ledger.ConfigHistoryRetriever, error)
 
@@ -53,12 +53,12 @@ type LedgerCommitter struct {
 
 // ConfigBlockEventer callback function proto type to define action
 // upon arrival on new configuaration update block
-type ConfigBlockEventer func(block *unmarshaled.Block) error
+type ConfigBlockEventer func(block *cached.Block) error
 
 // NewLedgerCommitter is a factory function to create an instance of the committer
 // which passes incoming blocks via validation and commits them into the ledger.
 func NewLedgerCommitter(ledger PeerLedgerSupport) *LedgerCommitter {
-	return NewLedgerCommitterReactive(ledger, func(_ *unmarshaled.Block) error { return nil })
+	return NewLedgerCommitterReactive(ledger, func(_ *cached.Block) error { return nil })
 }
 
 // NewLedgerCommitterReactive is a factory function to create an instance of the committer
@@ -70,7 +70,7 @@ func NewLedgerCommitterReactive(ledger PeerLedgerSupport, eventer ConfigBlockEve
 
 // preCommit takes care to validate the block and update based on its
 // content
-func (lc *LedgerCommitter) preCommit(block *unmarshaled.Block) error {
+func (lc *LedgerCommitter) preCommit(block *cached.Block) error {
 	// Updating CSCC with new configuration block
 	hdr :=block.Txs[0].Envelope.Payload.Header.ChannelHeader
 
@@ -117,8 +117,8 @@ func (lc *LedgerCommitter) LedgerHeight() (uint64, error) {
 }
 
 // GetBlocks used to retrieve blocks with sequence numbers provided in the slice
-func (lc *LedgerCommitter) GetBlocks(blockSeqs []uint64) []*unmarshaled.Block {
-	var blocks []*unmarshaled.Block
+func (lc *LedgerCommitter) GetBlocks(blockSeqs []uint64) []*cached.Block {
+	var blocks []*cached.Block
 
 	for _, seqNum := range blockSeqs {
 		if blck, err := lc.GetBlockByNumber(seqNum); err != nil {

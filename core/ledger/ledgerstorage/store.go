@@ -9,7 +9,7 @@ package ledgerstorage
 import (
 	fffsblkstorage "github.com/hyperledger/fabric/fastfabric-extensions/fsblkstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"sync"
 
 	"github.com/hyperledger/fabric/common/flogging"
@@ -192,7 +192,7 @@ func (s *Store) GetPvtDataAndBlockByNum(blockNum uint64, filter ledger.PvtNsColl
 	s.rwlock.RLock()
 	defer s.rwlock.RUnlock()
 
-	var block *unmarshaled.Block
+	var block *cached.Block
 	var pvtdata []*ledger.TxPvtData
 	var err error
 	if block, err = s.RetrieveBlockByNumber(blockNum); err != nil {

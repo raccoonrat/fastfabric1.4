@@ -8,7 +8,7 @@ package transaction
 
 import (
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -23,7 +23,7 @@ type Processor struct {
 	TMSManager TMSManager
 }
 
-func (p *Processor) GenerateSimulationResults(txEnv *unmarshaled.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
+func (p *Processor) GenerateSimulationResults(txEnv *cached.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
 	// Extract channel header and token transaction
 	ch, ttx, ci, err := UnmarshalTokenTransaction(txEnv.Raw.Payload)
 	if err != nil {

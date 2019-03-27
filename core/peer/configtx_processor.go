@@ -8,7 +8,7 @@ package peer
 
 import (
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/customtx"
@@ -38,7 +38,7 @@ func newConfigTxProcessor() customtx.Processor {
 // However, if 'initializingLedger' is true (i.e., either the ledger is being created from the genesis block
 // or the ledger is synching the state with the blockchain, during start up), the full config is computed using
 // the most recent configs from statedb
-func (tp *configtxProcessor) GenerateSimulationResults(txEnv *unmarshaled.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
+func (tp *configtxProcessor) GenerateSimulationResults(txEnv *cached.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
 	payload := txEnv.Payload
 	if payload.Err != nil{
 		panic(payload.Err)

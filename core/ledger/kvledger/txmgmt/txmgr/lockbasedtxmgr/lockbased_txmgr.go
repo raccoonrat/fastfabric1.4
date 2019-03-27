@@ -7,7 +7,7 @@ package lockbasedtxmgr
 
 import (
 	"bytes"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -44,7 +44,7 @@ type LockBasedTxMgr struct {
 }
 
 type current struct {
-	block     *unmarshaled.Block
+	block     *cached.Block
 	batch     *privacyenabledstate.UpdateBatch
 	listeners []ledger.StateListener
 }

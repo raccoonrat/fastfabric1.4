@@ -6,7 +6,7 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/common/util"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/gossip/api"
 	"github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/msp/mgmt"
@@ -22,7 +22,7 @@ type MessageCryptoService interface {
 	// VerifyBlock returns nil if the block is properly signed, and the claimed seqNum is the
 	// sequence number that the block's header contains.
 	// else returns error
-	VerifyUnmarshaledBlock(chainID common.ChainID, uBlock *unmarshaled.Block) error
+	VerifyUnmarshaledBlock(chainID common.ChainID, uBlock *cached.Block) error
 }
 
 type MSPMessageCryptoService struct {
@@ -60,7 +60,7 @@ func (m *MSPMessageCryptoService) Expiration(peerIdentity api.PeerIdentityType) 
 	return m.service.Expiration(peerIdentity)
 }
 
-func (m *MSPMessageCryptoService) VerifyUnmarshaledBlock(chainID common.ChainID,  block *unmarshaled.Block) error {
+func (m *MSPMessageCryptoService) VerifyUnmarshaledBlock(chainID common.ChainID,  block *cached.Block) error {
 	if block.ChannelId != string(chainID) {
 		return fmt.Errorf("Invalid block's channel id. Expected [%s]. Given [%s]", chainID, block.ChannelId)
 	}

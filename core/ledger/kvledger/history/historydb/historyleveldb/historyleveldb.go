@@ -15,7 +15,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
 )
 
@@ -70,7 +70,7 @@ func (historyDB *historyDB) Close() {
 }
 
 // Commit implements method in HistoryDB interface
-func (historyDB *historyDB) Commit(block *unmarshaled.Block) error {
+func (historyDB *historyDB) Commit(block *cached.Block) error {
 
 	blockNo := block.Header.Number
 	//Set the starting tranNo to 0

@@ -8,7 +8,7 @@ package customtx
 
 import (
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 )
 
 // InvalidTxError is expected to be thrown by a custom transaction processor (an implementation of interface `Processor`)
@@ -31,5 +31,5 @@ func (e *InvalidTxError) Error() string {
 // In the former case, the transactions processed are expected to be valid and in the latter case, only valid transactions
 // are reprocessed and hence any validation can be skipped.
 type Processor interface {
-	GenerateSimulationResults(txEnvelop *unmarshaled.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error
+	GenerateSimulationResults(txEnvelop *cached.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error
 }

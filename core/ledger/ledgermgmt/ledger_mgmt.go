@@ -9,7 +9,7 @@ package ledgermgmt
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
 	"sync"
 
@@ -91,7 +91,7 @@ func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 	if !initialized {
 		return nil, ErrLedgerMgmtNotInitialized
 	}
-	gb,err := unmarshaled.NewBlock(genesisBlock)
+	gb,err := cached.NewBlock(genesisBlock)
 	if err != nil {
 		return nil, fmt.Errorf("Could not unmarshal genesis block")
 	}

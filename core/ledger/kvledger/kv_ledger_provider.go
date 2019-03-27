@@ -9,7 +9,7 @@ package kvledger
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -97,7 +97,7 @@ func (provider *Provider) Initialize(initializer *ledger.Initializer) error {
 // upon a successful ledger creation with the committed genesis block, removes the flag and add entry into
 // created ledgers list (atomically). If a crash happens in between, the 'recoverUnderConstructionLedger'
 // function is invoked before declaring the provider to be usable
-func (provider *Provider) Create(genesisBlock *unmarshaled.Block) (ledger.PeerLedger, error) {
+func (provider *Provider) Create(genesisBlock *cached.Block) (ledger.PeerLedger, error) {
 	ledgerID := genesisBlock.ChannelId
 	if ledgerID == "" {
 		return nil, fmt.Errorf("No channelId in genesis block")
@@ -283,7 +283,7 @@ func (s *idStore) getUnderConstructionFlag() (string, error) {
 	return string(val), nil
 }
 
-func (s *idStore) createLedgerID(ledgerID string, gb *unmarshaled.Block) error {
+func (s *idStore) createLedgerID(ledgerID string, gb *cached.Block) error {
 	key := s.encodeLedgerKey(ledgerID)
 	var val []byte
 	var err error

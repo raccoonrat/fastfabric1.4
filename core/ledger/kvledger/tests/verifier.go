@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package tests
 
 import (
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
@@ -163,7 +163,7 @@ func (r *retrievedBlockAndPvtdata) pvtdataShouldNotContain(ns, coll string) {
 	}
 }
 
-func (r *retrievedBlockAndPvtdata) sameBlockHeaderAndData(expectedBlock *unmarshaled.Block) {
+func (r *retrievedBlockAndPvtdata) sameBlockHeaderAndData(expectedBlock *cached.Block) {
 	r.assert.True(proto.Equal(expectedBlock.Raw.Data, r.BlockAndPvtData.Block.Raw.Data))
 	r.assert.True(proto.Equal(expectedBlock.Raw.Header, r.BlockAndPvtData.Block.Header))
 }

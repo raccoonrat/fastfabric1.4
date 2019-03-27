@@ -9,7 +9,7 @@ package txvalidator
 import (
 	"context"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -58,14 +58,14 @@ type Support interface {
 // and return the bit array mask indicating invalid transactions which
 // didn't pass validation.
 type Validator interface {
-	Validate(block *unmarshaled.Block) error
+	Validate(block *cached.Block) error
 }
 
 // private interface to decouple tx validator
 // and vscc execution, in order to increase
 // testability of TxValidator
 type vsccValidator interface {
-	VSCCValidateTx(seq int, payload *unmarshaled.Payload, envBytes []byte, block *common.Block) (error, peer.TxValidationCode)
+	VSCCValidateTx(seq int, payload *cached.Payload, envBytes []byte, block *common.Block) (error, peer.TxValidationCode)
 }
 
 // implementation of Validator interface, keeps
@@ -80,8 +80,8 @@ type TxValidator struct {
 var logger = flogging.MustGetLogger("committer.txvalidator")
 
 type blockValidationRequest struct {
-	block *unmarshaled.Block
-	tx     *unmarshaled.Tx
+	block *cached.Block
+	tx     *cached.Tx
 	tIdx  int
 }
 
@@ -129,7 +129,7 @@ func (v *TxValidator) chainExists(chain string) bool {
 //    state is when a config transaction is received, but they are
 //    guaranteed to be alone in the block. If/when this assumption
 //    is violated, this code must be changed.
-func (v *TxValidator) Validate(block *unmarshaled.Block) error {
+func (v *TxValidator) Validate(block *cached.Block) error {
 	var err error
 	var errPos int
 
@@ -151,7 +151,7 @@ func (v *TxValidator) Validate(block *unmarshaled.Block) error {
 			// ensure that we don't have too many concurrent validation workers
 			v.Support.Acquire(context.Background(), 1)
 
-			go func(index int, t *unmarshaled.Tx) {
+			go func(index int, t *cached.Tx) {
 				defer v.Support.Release(1)
 
 				v.validateTx(&blockValidationRequest{
@@ -235,7 +235,7 @@ func (v *TxValidator) Validate(block *unmarshaled.Block) error {
 
 // allValidated returns error if some of the validation flags have not been set
 // during validation
-func (v *TxValidator) allValidated(txsfltr ledgerUtil.TxValidationFlags, block *unmarshaled.Block) error {
+func (v *TxValidator) allValidated(txsfltr ledgerUtil.TxValidationFlags, block *cached.Block) error {
 	for id, f := range txsfltr {
 		if peer.TxValidationCode(f) == peer.TxValidationCode_NOT_VALIDATED {
 			return errors.Errorf("transaction %d in block %d has skipped validation", id, block.Header.Number)
@@ -472,7 +472,7 @@ func (v *TxValidator) validateTx(req *blockValidationRequest, results chan<- *bl
 // in the ledger or no decision can be made for whether such transaction exists;
 // the function returns nil if it has ensured that there is no such duplicate, such
 // that its consumer can proceed with the transaction processing
-func (v *TxValidator) checkTxIdDupsLedger(tIdx int, chdr *unmarshaled.ChannelHeader, ldgr ledger.PeerLedger) (errorTuple *blockValidationResult) {
+func (v *TxValidator) checkTxIdDupsLedger(tIdx int, chdr *cached.ChannelHeader, ldgr ledger.PeerLedger) (errorTuple *blockValidationResult) {
 
 	// Retrieve the transaction identifier of the input header
 	txID := chdr.TxId
@@ -557,7 +557,7 @@ func (v *TxValidator) invalidTXsForUpgradeCC(txsChaincodeNames map[int]*sysccpro
 	}
 }
 
-func (v *TxValidator) getTxCCInstance(payload *unmarshaled.Payload) (invokeCCIns, upgradeCCIns *sysccprovider.ChaincodeInstance, err error) {
+func (v *TxValidator) getTxCCInstance(payload *cached.Payload) (invokeCCIns, upgradeCCIns *sysccprovider.ChaincodeInstance, err error) {
 	// This is duplicated unpacking work, but make test easier.
 	chdr := payload.Header.ChannelHeader
 	if chdr.Err != nil {
@@ -616,7 +616,7 @@ func (v *TxValidator) getTxCCInstance(payload *unmarshaled.Payload) (invokeCCIns
 	return invokeIns, nil, nil
 }
 
-func (v *TxValidator) getUpgradeTxInstance(chainID string, cds *unmarshaled.DeploymentSpec) (*sysccprovider.ChaincodeInstance, error) {
+func (v *TxValidator) getUpgradeTxInstance(chainID string, cds *cached.DeploymentSpec) (*sysccprovider.ChaincodeInstance, error) {
 	return &sysccprovider.ChaincodeInstance{
 		ChainID:          chainID,
 		ChaincodeName:    cds.ChaincodeSpec.ChaincodeId.Name,

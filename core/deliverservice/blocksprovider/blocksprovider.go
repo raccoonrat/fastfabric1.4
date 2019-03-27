@@ -10,7 +10,7 @@ import (
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/gossip"
 	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"math"
 	"sync/atomic"
 	"time"
@@ -162,7 +162,7 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 			errorStatusCounter = 0
 			statusCounter = 0
 
-			commitPromise := make(chan *unmarshaled.Block, 1)
+			commitPromise := make(chan *cached.Block, 1)
 			go b.processBlock(t.Block, commitPromise)
 			parallel.ReadyToCommit <- commitPromise
 
@@ -186,8 +186,8 @@ func (b *blocksProviderImpl) receive(messages chan *orderer.DeliverResponse) {
 	}
 }
 
-func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise chan *unmarshaled.Block) {
-	done := make(chan *unmarshaled.Block)
+func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise chan *cached.Block) {
+	done := make(chan *cached.Block)
 	b.verify(block, done)
 
 	success := false
@@ -203,9 +203,9 @@ func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise cha
 	}
 }
 
-func (b *blocksProviderImpl) verify(block *common.Block, done chan *unmarshaled.Block){
+func (b *blocksProviderImpl) verify(block *common.Block, done chan *cached.Block){
 	defer close(done)
-	uBlock, err := unmarshaled.NewBlock(block)
+	uBlock, err := cached.NewBlock(block)
 	if err != nil {
 		logger.Warning("Failed unmarshalling block bytes on channel [%s]: [%s]",  b.chainID, err)
 	}

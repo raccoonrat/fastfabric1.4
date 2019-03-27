@@ -20,7 +20,7 @@ import (
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
-	"github.com/hyperledger/fabric/fastfabric-extensions/unmarshaled"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 )
 
 // HistoryDBProvider provides an instance of a history DB
@@ -34,7 +34,7 @@ type HistoryDBProvider interface {
 // HistoryDB - an interface that a history database should implement
 type HistoryDB interface {
 	NewHistoryQueryExecutor(blockStore blkstorage.BlockStore) (ledger.HistoryQueryExecutor, error)
-	Commit(block *unmarshaled.Block) error
+	Commit(block *cached.Block) error
 	GetLastSavepoint() (*version.Height, error)
 	ShouldRecover(lastAvailableBlock uint64) (bool, uint64, error)
 	CommitLostBlock(blockAndPvtdata *ledger.BlockAndPvtData) error
