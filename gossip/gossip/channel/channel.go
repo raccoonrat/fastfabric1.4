@@ -9,6 +9,8 @@ package channel
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/protos/utils"
 	"reflect"
 	"strconv"
 	"sync"
@@ -722,7 +724,10 @@ func (gc *gossipChannel) verifyBlock(msg *proto.GossipMessage, sender common.PKI
 	}
 	seqNum := payload.SeqNum
 	rawBlock := payload.Data
-	err := gc.mcs.VerifyBlock(msg.Channel, seqNum, rawBlock)
+	block, err := utils.GetBlockFromBlockBytes(rawBlock)
+	if err == nil {
+		err = gc.mcs.VerifyBlock(msg.Channel, seqNum, cached.GetBlock(block))
+	}
 	if err != nil {
 		gc.logger.Warningf("Received fabricated block from %v in DataUpdate: %+v", sender, errors.WithStack(err))
 		return false

@@ -124,11 +124,11 @@ type retrievedBlockAndPvtdata struct {
 func (r *retrievedBlockAndPvtdata) sameAs(expectedBlockAndPvtdata *ledger.BlockAndPvtData) {
 	r.samePvtdata(expectedBlockAndPvtdata.PvtData)
 	r.sameBlockHeaderAndData(expectedBlockAndPvtdata.Block)
-	r.sameMetadata(expectedBlockAndPvtdata.Block.Raw)
+	r.sameMetadata(expectedBlockAndPvtdata.Block)
 }
 
 func (r *retrievedBlockAndPvtdata) hasNumTx(numTx int) {
-	r.assert.Len(r.Block.Raw.Data.Data, numTx)
+	r.assert.Len(r.Block.Data.Data, numTx)
 }
 
 func (r *retrievedBlockAndPvtdata) hasNoPvtdata() {
@@ -168,7 +168,7 @@ func (r *retrievedBlockAndPvtdata) sameBlockHeaderAndData(expectedBlock *cached.
 	r.assert.True(proto.Equal(expectedBlock.Header, r.BlockAndPvtData.Block.Header))
 }
 
-func (r *retrievedBlockAndPvtdata) sameMetadata(expectedBlock *common.Block) {
+func (r *retrievedBlockAndPvtdata) sameMetadata(expectedBlock *cached.Block) {
 	// marshalling/unmarshalling treats a nil byte and empty byte interchangeably (based on which scheme is chosen proto vs gob)
 	// so explicitly comparing each metadata
 	retrievedMetadata := r.Block.Metadata.Metadata

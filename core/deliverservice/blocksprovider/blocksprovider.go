@@ -95,7 +95,7 @@ type blocksProviderImpl struct {
 
 	gossip GossipServiceAdapter
 
-	mcs gossip.MessageCryptoService
+	mcs api.MessageCryptoService
 
 	done int32
 
@@ -108,7 +108,7 @@ var maxRetryDelay = time.Second * 10
 var logger = flogging.MustGetLogger("blocksProvider")
 
 // NewBlocksProvider constructor function to create blocks deliverer instance
-func NewBlocksProvider(chainID string, client streamClient, gossip GossipServiceAdapter, mcs gossip.MessageCryptoService) BlocksProvider {
+func NewBlocksProvider(chainID string, client streamClient, gossip GossipServiceAdapter, mcs api.MessageCryptoService) BlocksProvider {
 	return &blocksProviderImpl{
 		chainID:              chainID,
 		client:               client,
@@ -205,11 +205,8 @@ func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise cha
 
 func (b *blocksProviderImpl) verify(block *common.Block, done chan *cached.Block){
 	defer close(done)
-	cblock, err := cached.GetBlock(block)
-	if err != nil {
-		logger.Warning("Failed unmarshalling block bytes on channel [%s]: [%s]",  b.chainID, err)
-	}
-	if err := b.mcs.VerifyUnmarshaledBlock(gossipcommon.ChainID(b.chainID), cblock); err != nil {
+	cblock := cached.GetBlock(block)
+	if err := b.mcs.VerifyBlock(gossipcommon.ChainID(b.chainID),cblock.Header.Number, cblock); err != nil {
 		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, cblock.Header.Number, err)
 		return
 	}

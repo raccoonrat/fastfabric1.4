@@ -9,6 +9,7 @@ package state
 import (
 	"bytes"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/protos/utils"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,7 +81,7 @@ type MCSAdapter interface {
 	// VerifyBlock returns nil if the block is properly signed, and the claimed seqNum is the
 	// sequence number that the block's header contains.
 	// else returns error
-	VerifyBlock(chainID common2.ChainID, seqNum uint64, signedBlock []byte) error
+	VerifyBlock(chainID common2.ChainID, seqNum uint64, signedBlock *cached.Block) error
 
 	// VerifyByChannel checks that signature is a valid signature of message
 	// under a peer's verification key, but also in the context of a specific channel.
@@ -474,7 +475,11 @@ func (s *GossipStateProviderImpl) handleStateResponse(msg proto.ReceivedMessage)
 	}
 	for _, payload := range response.GetPayloads() {
 		logger.Debugf("Received payload with sequence number %d.", payload.SeqNum)
-		if err := s.mediator.VerifyBlock(common2.ChainID(s.chainID), payload.SeqNum, payload.Data); err != nil {
+		rawBlock, err :=utils.GetBlockFromBlockBytes(payload.Data)
+		if err == nil{
+			err = s.mediator.VerifyBlock(common2.ChainID(s.chainID), payload.SeqNum, cached.GetBlock(rawBlock))
+		}
+		if err != nil {
 			err = errors.WithStack(err)
 			logger.Warningf("Error verifying block with sequence number %d, due to %+v", payload.SeqNum, err)
 			return uint64(0), err
@@ -483,7 +488,7 @@ func (s *GossipStateProviderImpl) handleStateResponse(msg proto.ReceivedMessage)
 			max = payload.SeqNum
 		}
 
-		err := s.addPayload(payload, blocking)
+		err = s.addPayload(payload, blocking)
 		if err != nil {
 			logger.Warningf("Block [%d] received from block transfer wasn't added to payload buffer: %v", payload.SeqNum, err)
 		}

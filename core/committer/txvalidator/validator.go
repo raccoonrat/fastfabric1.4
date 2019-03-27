@@ -307,7 +307,7 @@ func (v *TxValidator) validateTx(req *blockValidationRequest, results chan<- *bl
 			return
 		}
 
-		chdr, err := payload.UnmarshalChannelHeader()
+		chdr, err := payload.Header.UnmarshalChannelHeader()
 		if err != nil {
 			logger.Warningf("Could not unmarshal channel header, err %s, skipping", err)
 			results <- &blockValidationResult{
@@ -561,7 +561,7 @@ func (v *TxValidator) invalidTXsForUpgradeCC(txsChaincodeNames map[int]*sysccpro
 
 func (v *TxValidator) getTxCCInstance(payload *cached.Payload) (invokeCCIns, upgradeCCIns *sysccprovider.ChaincodeInstance, err error) {
 	// This is duplicated unpacking work, but make test easier.
-	chdr, err := payload.UnmarshalChannelHeader()
+	chdr, err := payload.Header.UnmarshalChannelHeader()
 	if err != nil {
 		return nil, nil, err
 	}

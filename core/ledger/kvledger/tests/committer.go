@@ -54,7 +54,7 @@ func (c *committer) copyOfBlockAndPvtdata(blk *ledger.BlockAndPvtData) *ledger.B
 	c.assert.NoError(err)
 	blkCopy := &common.Block{}
 	c.assert.NoError(proto.Unmarshal(blkBytes, blkCopy))
-	bcopy,_ := cached.GetBlock(blkCopy)
+	bcopy := cached.GetBlock(blkCopy)
 	return &ledger.BlockAndPvtData{Block: bcopy, PvtData: blk.PvtData,
 		MissingPvtData: blk.MissingPvtData}
 }
@@ -93,7 +93,7 @@ func (g *blkGenerator) nextBlockAndPvtdata(trans ...*txAndPvtdata) *ledger.Block
 	g.lastNum++
 	g.lastHash = block.Header.Hash()
 	setBlockFlagsToValid(block)
-	b,_ := cached.GetBlock(block)
+	b := cached.GetBlock(block)
 	return &ledger.BlockAndPvtData{Block: b, PvtData: blockPvtdata,
 		MissingPvtData: make(ledger.TxMissingPvtDataMap)}
 }

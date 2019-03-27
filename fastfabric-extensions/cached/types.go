@@ -38,10 +38,6 @@ type Transaction struct {
 	Actions []*TransactionAction
 }
 
-func (transaction *Transaction) getFirstAction() {
-	
-}
-
 type TransactionAction struct {
 	*peer.TransactionAction
 	cachedSigHeader  *common.SignatureHeader
