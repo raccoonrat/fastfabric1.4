@@ -17,11 +17,6 @@ type Metadata struct {
 	cachedSigHeaders []*common.SignatureHeader
 }
 
-type MetadataSignature struct {
-	*common.MetadataSignature
-	cachedSigHeader *common.SignatureHeader
-}
-
 type Envelope struct {
 	*common.Envelope
 	cachedPayload *Payload
@@ -29,9 +24,8 @@ type Envelope struct {
 
 type Payload struct {
 	*common.Payload
-	cachedChanHeader *ChannelHeader
-	cachedSigHeader  *common.SignatureHeader
-	cachedEnTx       *Transaction
+	cachedEnTx *Transaction
+	Header     *Header
 }
 
 type ChannelHeader struct {
@@ -44,15 +38,14 @@ type Transaction struct {
 	Actions []*TransactionAction
 }
 
+func (transaction *Transaction) getFirstAction() {
+	
+}
+
 type TransactionAction struct {
 	*peer.TransactionAction
 	cachedSigHeader  *common.SignatureHeader
 	cachedActionPayload *ChaincodeActionPayload
-}
-
-type ChaincodeEndorsedAction struct {
-	*peer.ChaincodeEndorsedAction
-	cachedRespPayload *ProposalResponsePayload
 }
 
 type ProposalResponsePayload struct {
@@ -62,7 +55,6 @@ type ProposalResponsePayload struct {
 
 type ChaincodeInvocationSpec struct {
 	*peer.ChaincodeInvocationSpec
-	cachedDeploymentSpec *peer.ChaincodeDeploymentSpec
 }
 
 type ChaincodeProposalPayload struct {
@@ -76,9 +68,20 @@ type ChaincodeActionPayload struct {
 	cachedPropPayload *ChaincodeProposalPayload
 }
 
+type ChaincodeEndorsedAction struct {
+	*peer.ChaincodeEndorsedAction
+	cachedRespPayload *ProposalResponsePayload
+}
+
 
 type ChaincodeAction struct {
 	*peer.ChaincodeAction
 	cachedRwSet  *rwsetutil.TxRwSet
 	cachedEvents *peer.ChaincodeEvent
+}
+
+type Header struct{
+	*common.Header
+	cachedChanHeader *ChannelHeader
+	cachedSigHeader  *common.SignatureHeader
 }

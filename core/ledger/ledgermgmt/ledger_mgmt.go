@@ -8,9 +8,6 @@ package ledgermgmt
 
 import (
 	"bytes"
-	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
-	"github.com/hyperledger/fabric/protos/common"
 	"sync"
 
 	"github.com/hyperledger/fabric/common/flogging"
@@ -21,6 +18,8 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/cceventmgmt"
 	"github.com/hyperledger/fabric/core/ledger/customtx"
 	"github.com/hyperledger/fabric/core/ledger/kvledger"
+	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/pkg/errors"
 )
 
@@ -91,17 +90,13 @@ func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 	if !initialized {
 		return nil, ErrLedgerMgmtNotInitialized
 	}
-	gb,err := cached.NewBlock(genesisBlock)
+	id, err := utils.GetChainIDFromBlock(genesisBlock)
 	if err != nil {
-		return nil, fmt.Errorf("Could not unmarshal genesis block")
-	}
-	id := gb.ChannelId
-	if id != "" {
-		return nil, fmt.Errorf("No channel id found")
+		return nil, err
 	}
 
 	logger.Infof("Creating ledger [%s] with genesis block", id)
-	l, err := ledgerProvider.Create(gb)
+	l, err := ledgerProvider.Create(genesisBlock)
 	if err != nil {
 		return nil, err
 	}

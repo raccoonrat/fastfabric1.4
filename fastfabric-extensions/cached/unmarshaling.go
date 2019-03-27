@@ -9,9 +9,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-func GetBlock(raw *common.Block) (*Block, error) {
+func GetBlock(raw *common.Block) (*Block) {
 	if raw == nil {
-		return nil, fmt.Errorf("block must not be nil")
+		return nil
 	}
 
 	lenMeta := 0
@@ -27,8 +27,7 @@ func GetBlock(raw *common.Block) (*Block, error) {
 	return &Block{
 		Block: raw,
 		cachedMetadata: make([]*Metadata, lenMeta),
-		cachedEnvs: make([]*Envelope, lenEnvs)},
-	nil
+		cachedEnvs: make([]*Envelope, lenEnvs)}
 }
 
 func (b *Block) UnmarshalAll() error {
@@ -41,17 +40,16 @@ func (b *Block) UnmarshalAll() error {
 			return err
 		}
 	}
-	envs, err :=b.UnmarshalData();
+	envs, err :=b.UnmarshalAllEnvelopes();
 	if err != nil{
 		return err
 	}
-
 	for _, env := range envs{
 		pl, err := env.UnmarshalPayload();
 		if err != nil{
 			return err
 		}
-		chdr, err := pl.UnmarshalChannelHeader()
+		chdr, err := pl.Header.UnmarshalChannelHeader()
 		if err != nil{
 			return err
 		}
@@ -60,18 +58,18 @@ func (b *Block) UnmarshalAll() error {
 			return err
 		}
 
-		_, err = pl.UnmarshalSignatureHeader()
+		_, err = pl.Header.UnmarshalSignatureHeader()
 		if err != nil{
 			return err
 		}
 
-		etx, err :=pl.UnmarshalEndorserTransaction()
+		etx, err :=pl.UnmarshalTransaction()
 		if err != nil{
 			return err
 		}
 
 		for _,act := range etx.Actions {
-			_, err := act.UnmarshalHeader()
+			_, err := act.UnmarshalSignatureHeader()
 			if err != nil{
 				return err
 			}
@@ -105,11 +103,10 @@ func (b *Block) UnmarshalAll() error {
 				return err
 			}
 
-			input, err := propPl.UnmarshalInput()
+			_, err = propPl.UnmarshalInput()
 			if err != nil{
 				return err
 			}
-			input.
 		}
 	}
 	return nil
@@ -172,13 +169,13 @@ func (meta *Metadata) UnmarshalAllSignatureHeaders() ([]*common.SignatureHeader,
 	return meta.cachedSigHeaders, nil
 }
 
-func (b *Block) UnmarshalData() ([]*Envelope, error){
+func (b *Block) UnmarshalAllEnvelopes() ([]*Envelope, error){
 	if b.Data == nil || b.Data.Data == nil {
 		return nil, fmt.Errorf("block data must not be nil")
 	}
 
 	for i := range b.Data.Data {
-		if _, err := b.unmarshalSpecificData(i); err != nil {
+		if _, err := b.UnmarshalSpecificEnvelope(i); err != nil {
 			return nil, err
 		}
 	}
@@ -186,7 +183,7 @@ func (b *Block) UnmarshalData() ([]*Envelope, error){
 	return b.cachedEnvs, nil
 }
 
-func (b Block) unmarshalSpecificData(index int) (*Envelope, error) {
+func (b Block) UnmarshalSpecificEnvelope(index int) (*Envelope, error) {
 	if b.Data == nil || b.Data.Data == nil {
 		return nil, fmt.Errorf("block data must not be nil")
 	}
@@ -217,42 +214,42 @@ func (env *Envelope) UnmarshalPayload() (*Payload, error) {
 		return nil, errors.Wrap(err, "error unmarshaling Payload")
 	}
 
-	payload := &Payload{Payload: payloadRaw}
+	payload := &Payload{Payload: payloadRaw, Header: &Header{Header:payloadRaw.Header}}
 	env.cachedPayload = payload
 	return payload, nil
 }
 
-func(pl *Payload) UnmarshalChannelHeader() (*ChannelHeader, error) {
-	if pl.cachedChanHeader != nil {
-		return pl.cachedChanHeader, nil
+func(hdr *Header) UnmarshalChannelHeader() (*ChannelHeader, error) {
+	if hdr.cachedChanHeader != nil {
+		return hdr.cachedChanHeader, nil
 	}
 
-	if pl.Header == nil {
+	if hdr.Header == nil {
 		return nil, fmt.Errorf("payload header is nil")
 	}
 
 	headerRaw := &common.ChannelHeader{}
-	if err := proto.Unmarshal(pl.Header.ChannelHeader, headerRaw); err != nil{
+	if err := proto.Unmarshal(hdr.Header.ChannelHeader, headerRaw); err != nil{
 		return nil, errors.Wrap(err, "error unmarshaling payload ChannelHeader")
 	}
 
 	header := &ChannelHeader{ChannelHeader: headerRaw}
-	pl.cachedChanHeader = header
+	hdr.cachedChanHeader = header
 	return header, nil
 }
 
-func(pl *Payload) UnmarshalSignatureHeader() (*common.SignatureHeader, error) {
-	if pl.cachedChanHeader != nil {
-		return pl.cachedSigHeader, nil
+func(hdr *Header) UnmarshalSignatureHeader() (*common.SignatureHeader, error) {
+	if hdr.cachedSigHeader != nil {
+		return hdr.cachedSigHeader, nil
 	}
 
-	if pl.Header == nil {
+	if hdr.Header == nil {
 		return nil, fmt.Errorf("payload header is nil")
 	}
 
-	headerRaw, err := unmarshalSignatureHeader(pl.Header.SignatureHeader)
+	headerRaw, err := unmarshalSignatureHeader(hdr.Header.SignatureHeader)
 
-	pl.cachedSigHeader = headerRaw
+	hdr.cachedSigHeader = headerRaw
 	return headerRaw, err
 }
 
@@ -277,7 +274,7 @@ func (ch *ChannelHeader) UnmarshalExtension() (*peer.ChaincodeHeaderExtension, e
 	return ext, nil
 }
 
-func (pl *Payload) UnmarshalEndorserTransaction() (*Transaction, error) {
+func (pl *Payload) UnmarshalTransaction() (*Transaction, error) {
 	if pl.cachedEnTx != nil{
 		return pl.cachedEnTx, nil
 	}
@@ -294,7 +291,7 @@ func (pl *Payload) UnmarshalEndorserTransaction() (*Transaction, error) {
 	return tx, nil
 }
 
-func (act *TransactionAction) UnmarshalHeader() (*common.SignatureHeader, error) {
+func (act *TransactionAction) UnmarshalSignatureHeader() (*common.SignatureHeader, error) {
 	if act.cachedSigHeader != nil {
 		return act.cachedSigHeader, nil
 	}
@@ -401,10 +398,4 @@ func (cpp *ChaincodeProposalPayload) UnmarshalInput() (*ChaincodeInvocationSpec,
 	}
 	cpp.cachedInput = &ChaincodeInvocationSpec{ChaincodeInvocationSpec:cis}
 	return cpp.cachedInput, nil
-}
-
-ccspec := cpp.Input.ChaincodeSpec
-if ccspec != nil && ccspec.Input != nil && ccspec.Input.Args!= nil && len(ccspec.Input.Args) > 1 {
-cpp.Input.DeploymentSpec.ChaincodeDeploymentSpec, cpp.Input.DeploymentSpec.Err =
-utils.GetChaincodeDeploymentSpec(cpp.Input.ChaincodeSpec.Input.Args[2],platforms.NewRegistry(&golang.Platform{}))
 }

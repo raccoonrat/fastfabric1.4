@@ -12,6 +12,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+// GetChainIDFromBlockBytes returns chain ID given byte array which represents
+// the block
+func GetChainIDFromBlockBytes(bytes []byte) (string, error) {
+	block, err := GetBlockFromBlockBytes(bytes)
+	if err != nil {
+		return "", err
+	}
+
+	return GetChainIDFromBlock(block)
+}
+
 // GetChainIDFromBlock returns chain ID in the block
 func GetChainIDFromBlock(block *cb.Block) (string, error) {
 	if block == nil || block.Data == nil || block.Data.Data == nil || len(block.Data.Data) == 0 {
@@ -46,6 +57,16 @@ func GetMetadataFromBlock(block *cb.Block, index cb.BlockMetadataIndex) (*cb.Met
 		return nil, errors.Wrapf(err, "error unmarshaling metadata from block at index [%s]", index)
 	}
 	return md, nil
+}
+
+// GetMetadataFromBlockOrPanic retrieves metadata at the specified index, or
+// panics on error
+func GetMetadataFromBlockOrPanic(block *cb.Block, index cb.BlockMetadataIndex) *cb.Metadata {
+	md, err := GetMetadataFromBlock(block, index)
+	if err != nil {
+		panic(err)
+	}
+	return md
 }
 
 // GetLastConfigIndexFromBlock retrieves the index of the last config block as

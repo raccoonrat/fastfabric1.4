@@ -155,7 +155,7 @@ func getBlockByNumber(vledger ledger.PeerLedger, number []byte) pb.Response {
 	//  This will preserve the transaction Payload header,
 	//  and client can do GetTransactionByID() if they want the full transaction details
 
-	bytes, err := utils.Marshal(block.Raw)
+	bytes, err := utils.Marshal(block)
 	if err != nil {
 		return shim.Error(err.Error())
 	}

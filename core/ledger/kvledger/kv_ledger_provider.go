@@ -20,6 +20,8 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
+	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"github.com/pkg/errors"
 )
@@ -97,10 +99,10 @@ func (provider *Provider) Initialize(initializer *ledger.Initializer) error {
 // upon a successful ledger creation with the committed genesis block, removes the flag and add entry into
 // created ledgers list (atomically). If a crash happens in between, the 'recoverUnderConstructionLedger'
 // function is invoked before declaring the provider to be usable
-func (provider *Provider) Create(genesisBlock *cached.Block) (ledger.PeerLedger, error) {
-	ledgerID := genesisBlock.ChannelId
-	if ledgerID == "" {
-		return nil, fmt.Errorf("No channelId in genesis block")
+func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger, error) {
+	ledgerID, err := utils.GetChainIDFromBlock(genesisBlock)
+	if err != nil {
+		return nil, err
 	}
 	exists, err := provider.idStore.ledgerIDExists(ledgerID)
 	if err != nil {
@@ -120,7 +122,7 @@ func (provider *Provider) Create(genesisBlock *cached.Block) (ledger.PeerLedger,
 		return nil, err
 	}
 	if err := lgr.CommitWithPvtData(&ledger.BlockAndPvtData{
-		Block: genesisBlock,
+		Block: cached.GetBlock(genesisBlock),
 	}); err != nil {
 		lgr.Close()
 		return nil, err
@@ -283,7 +285,7 @@ func (s *idStore) getUnderConstructionFlag() (string, error) {
 	return string(val), nil
 }
 
-func (s *idStore) createLedgerID(ledgerID string, gb *cached.Block) error {
+func (s *idStore) createLedgerID(ledgerID string, gb *common.Block) error {
 	key := s.encodeLedgerKey(ledgerID)
 	var val []byte
 	var err error
@@ -293,7 +295,7 @@ func (s *idStore) createLedgerID(ledgerID string, gb *cached.Block) error {
 	if val != nil {
 		return ErrLedgerIDExists
 	}
-	if val, err = proto.Marshal(gb.Raw); err != nil {
+	if val, err = proto.Marshal(gb); err != nil {
 		return err
 	}
 	batch := statedb.NewUpdateBatch()

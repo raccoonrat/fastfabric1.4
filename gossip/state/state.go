@@ -102,7 +102,7 @@ type ledgerResources interface {
 	// the order of private data in slice of PvtDataCollections doesn't imply the order of
 	// transactions in the block related to these private data, to get the correct placement
 	// need to read TxPvtData.SeqInBlock field
-	GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*cached.Block, util.PvtDataCollections, error)
+	GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*common.Block, util.PvtDataCollections, error)
 
 	// Get recent block sequence number
 	LedgerHeight() (uint64, error)
@@ -430,7 +430,7 @@ func (s *GossipStateProviderImpl) handleStateRequest(msg proto.ReceivedMessage) 
 			continue
 		}
 
-		blockBytes, err := pb.Marshal(block.Raw)
+		blockBytes, err := pb.Marshal(block)
 
 		if err != nil {
 			logger.Errorf("Could not marshal block: %+v", errors.WithStack(err))
@@ -542,19 +542,12 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
 					continue
 				}
-				block, err := cached.NewBlock(rawBlock)
-				if err != nil {
-					logger.Errorf("Error getting block with seqNum = %d due to (%+v)...dropping block", payload.SeqNum, errors.WithStack(err))
-					continue
-				}
-
 				if rawBlock.Data == nil || rawBlock.Header == nil {
 					logger.Errorf("Block with claimed sequence %d has no header (%v) or data (%v)",
 						payload.SeqNum, rawBlock.Header, rawBlock.Data)
 					continue
 				}
 				logger.Debugf("[%s] Transferring block [%d] with %d transaction(s) to the ledger", s.chainID, payload.SeqNum, len(rawBlock.Data.Data))
-
 
 				// Read all private data into slice
 				var p util.PvtDataCollections
@@ -565,7 +558,7 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 						continue
 					}
 				}
-				if err := s.commitBlock(block, p); err != nil {
+				if err := s.commitBlock(rawBlock, p); err != nil {
 					if executionErr, isExecutionErr := err.(*vsccErrors.VSCCExecutionFailureError); isExecutionErr {
 						logger.Errorf("Failed executing VSCC due to %v. Aborting chain processing", executionErr)
 						return
@@ -775,10 +768,10 @@ func (s *GossipStateProviderImpl) addPayload(payload *proto.Payload, blockingMod
 	return nil
 }
 
-func (s *GossipStateProviderImpl) commitBlock(block *cached.Block, pvtData util.PvtDataCollections) error {
+func (s *GossipStateProviderImpl) commitBlock(block *common.Block, pvtData util.PvtDataCollections) error {
 
 	// Commit block with available private transactions
-	if err := s.ledger.StoreBlock(block, pvtData); err != nil {
+	if err := s.ledger.StoreBlock(cached.GetBlock(block), pvtData); err != nil {
 		logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
 		return err
 	}
@@ -786,7 +779,7 @@ func (s *GossipStateProviderImpl) commitBlock(block *cached.Block, pvtData util.
 	// Update ledger height
 	s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
 	logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
-		s.chainID, block.Header.Number, len(block.Txs))
+		s.chainID, block.Header.Number, len(block.Data.Data))
 
 	return nil
 }

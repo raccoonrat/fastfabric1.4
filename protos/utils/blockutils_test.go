@@ -19,6 +19,93 @@ import (
 
 var testChainID = "myuniquetestchainid"
 
+func TestGetChainIDFromBlockBytes(t *testing.T) {
+	gb, err := configtxtest.MakeGenesisBlock(testChainID)
+	assert.NoError(t, err, "Failed to create test configuration block")
+	bytes, err := proto.Marshal(gb)
+	cid, err := utils.GetChainIDFromBlockBytes(bytes)
+	assert.NoError(t, err)
+	assert.Equal(t, testChainID, cid, "Failed to return expected chain ID")
+
+	// bad block bytes
+	_, err = utils.GetChainIDFromBlockBytes([]byte("bad block"))
+	assert.Error(t, err, "Expected error with malformed block bytes")
+}
+
+func TestGetChainIDFromBlock(t *testing.T) {
+	var err error
+	var gb *common.Block
+	var cid string
+
+	// nil block
+	_, err = utils.GetChainIDFromBlock(gb)
+	assert.Error(t, err, "Expected error getting channel id from nil block")
+
+	gb, err = configtxtest.MakeGenesisBlock(testChainID)
+	assert.NoError(t, err, "Failed to create test configuration block")
+
+	cid, err = utils.GetChainIDFromBlock(gb)
+	assert.NoError(t, err, "Failed to get chain ID from block")
+	assert.Equal(t, testChainID, cid, "Failed to return expected chain ID")
+
+	// missing data
+	badBlock := gb
+	badBlock.Data = nil
+	_, err = utils.GetChainIDFromBlock(badBlock)
+	assert.Error(t, err, "Expected error with missing block data")
+
+	// no envelope
+	badBlock = &cb.Block{
+		Data: &cb.BlockData{
+			Data: [][]byte{[]byte("bad envelope")},
+		},
+	}
+	_, err = utils.GetChainIDFromBlock(badBlock)
+	assert.Error(t, err, "Expected error with no envelope in data")
+
+	// bad payload
+	env, _ := proto.Marshal(&cb.Envelope{
+		Payload: []byte("bad payload"),
+	})
+	badBlock = &cb.Block{
+		Data: &cb.BlockData{
+			Data: [][]byte{env},
+		},
+	}
+	_, err = utils.GetChainIDFromBlock(badBlock)
+	assert.Error(t, err, "Expected error - malformed payload")
+
+	// bad channel header
+	payload, _ := proto.Marshal(&cb.Payload{
+		Header: &cb.Header{
+			ChannelHeader: []byte("bad header"),
+		},
+	})
+	env, _ = proto.Marshal(&cb.Envelope{
+		Payload: payload,
+	})
+	badBlock = &cb.Block{
+		Data: &cb.BlockData{
+			Data: [][]byte{env},
+		},
+	}
+	_, err = utils.GetChainIDFromBlock(badBlock)
+	assert.Error(t, err, "Expected error with malformed channel header")
+
+	// nil payload header
+	payload, _ = proto.Marshal(&cb.Payload{})
+	env, _ = proto.Marshal(&cb.Envelope{
+		Payload: payload,
+	})
+	badBlock = &cb.Block{
+		Data: &cb.BlockData{
+			Data: [][]byte{env},
+		},
+	}
+	_, err = utils.GetChainIDFromBlock(badBlock)
+	assert.Error(t, err, "Expected error when payload header is nil")
+}
+
 func TestGetBlockFromBlockBytes(t *testing.T) {
 	testChainID := "myuniquetestchainid"
 	gb, err := configtxtest.MakeGenesisBlock(testChainID)
@@ -39,10 +126,7 @@ func TestGetMetadataFromNewBlock(t *testing.T) {
 	assert.NoError(t, err, "Unexpected error extracting metadata from new block")
 	assert.Nil(t, md.Value, "Expected metadata field value to be nil")
 	assert.Equal(t, 0, len(md.Value), "Expected length of metadata field value to be 0")
-	md, err = utils.GetMetadataFromBlock(block, cb.BlockMetadataIndex_ORDERER)
-	if err != nil {
-		panic(err)
-	}
+	md = utils.GetMetadataFromBlockOrPanic(block, cb.BlockMetadataIndex_ORDERER)
 	assert.NotNil(t, md, "Expected to get metadata from block")
 
 	// malformed metadata
@@ -50,10 +134,7 @@ func TestGetMetadataFromNewBlock(t *testing.T) {
 	_, err = utils.GetMetadataFromBlock(block, cb.BlockMetadataIndex_ORDERER)
 	assert.Error(t, err, "Expected error with malformed metadata")
 	assert.Panics(t, func() {
-		_, err = utils.GetMetadataFromBlock(block, cb.BlockMetadataIndex_ORDERER)
-		if err != nil {
-			panic(err)
-		}
+		_ = utils.GetMetadataFromBlockOrPanic(block, cb.BlockMetadataIndex_ORDERER)
 	}, "Expected panic with malformed metadata")
 }
 

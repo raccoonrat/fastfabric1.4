@@ -54,7 +54,7 @@ func PullerConfigFromTopLevelConfig(systemChannel string, conf *localconfig.TopL
 // LedgerWriter allows the caller to write blocks and inspect the height
 type LedgerWriter interface {
 	// Append a new block to the ledger
-	Append(block *unmarshaled.Block) error
+	Append(block *common.Block) error
 
 	// Height returns the number of blocks on the ledger
 	Height() uint64

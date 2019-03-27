@@ -162,10 +162,7 @@ func TestVerifyBlockSignature(t *testing.T) {
 			name:          "bad signature header",
 			errorContains: "failed unmarshaling signature header",
 			mutateBlock: func(block *common.Block) *common.Block {
-				metadata, err := utils.GetMetadataFromBlock(block, common.BlockMetadataIndex_SIGNATURES)
-				if err != nil {
-					panic(err)
-				}
+				metadata := utils.GetMetadataFromBlockOrPanic(block, common.BlockMetadataIndex_SIGNATURES)
 				metadata.Signatures[0].SignatureHeader = []byte{1, 2, 3}
 				block.Metadata.Metadata[common.BlockMetadataIndex_SIGNATURES] = utils.MarshalOrPanic(metadata)
 				return block

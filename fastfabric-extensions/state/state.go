@@ -74,9 +74,9 @@ func (s *GossipStateProviderImpl) commit() {
 		}
 
 		// Update ledger height
-		s.mediator.UpdateLedgerHeight(block.Raw.Header.Number+1, common2.ChainID(s.chainID))
+		s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
 		logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
-			s.chainID, block.Raw.Header.Number, len(block.Txs))
+			s.chainID, block.Header.Number, len(block.Data.Data))
 	}
 }
 

@@ -79,13 +79,13 @@ func (historyDB *historyDB) Commit(block *cached.Block) error {
 	dbBatch := statedb.NewUpdateBatch()
 
 	logger.Debugf("Channel [%s]: Updating history database for blockNo [%v] with [%d] transactions",
-		historyDB.dbName, blockNo, len(block.Txs))
+		historyDB.dbName, blockNo, len(block.Data.Data))
 
 	// Get the invalidation byte array for the block
-	txsFilter := util.TxValidationFlags(block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	txsFilter := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 
 	// write each tran's write set to history db
-	for _, tx := range block.Txs {
+	for i := range block.Data.Data {
 
 		// If the tran is marked as invalid, skip it
 		if txsFilter.IsInvalid(int(tranNo)) {
@@ -95,36 +95,32 @@ func (historyDB *historyDB) Commit(block *cached.Block) error {
 			continue
 		}
 
-		env := tx.Envelope
-		if env.Err != nil {
-			return env.Err
+		env , err := block.UnmarshalSpecificEnvelope(i)
+		if err != nil {
+			return err
 		}
 
-		payload := env.Payload
-		if payload.Err != nil {
-			return payload.Err
+		payload, err := env.UnmarshalPayload()
+		if err != nil {
+			return err
 		}
 
-		chdr := payload.Header.ChannelHeader
-		if chdr.Err != nil {
-			return chdr.Err
+		chdr, err := payload.Header.UnmarshalChannelHeader()
+		if err != nil {
+			return err
 		}
 
 		if common.HeaderType(chdr.Type) == common.HeaderType_ENDORSER_TRANSACTION {
 
 			// extract actions from the envelope message
-			respPayload := payload.Transaction.Actions[0].Payload.Action.ProposalResponsePayload.Extension
-			if respPayload.Err != nil {
-				return respPayload.Err
+			ca, err := env.GetChaincodeAction()
+			if err != nil {
+				return err
 			}
 
-			//preparation for extracting RWSet from transaction
-			txRWSet := respPayload.Results
-
-			// Get the Result from the Action and then Unmarshal
-			// it into a TxReadWriteSet using custom unmarshalling
-			if txRWSet.Err != nil {
-				return txRWSet.Err
+			txRWSet, err := ca.UnmarshalRwSet()
+			if err != nil {
+				return err
 			}
 			// for each transaction, loop through the namespaces and writesets
 			// and add a history record for each write

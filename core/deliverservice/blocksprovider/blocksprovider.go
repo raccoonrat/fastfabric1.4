@@ -8,7 +8,6 @@ package blocksprovider
 
 import (
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
-	"github.com/hyperledger/fabric/fastfabric-extensions/gossip"
 	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"math"
@@ -17,6 +16,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric/gossip/api"
 	gossipcommon "github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/gossip/discovery"
 	"github.com/hyperledger/fabric/gossip/util"
@@ -205,16 +205,16 @@ func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise cha
 
 func (b *blocksProviderImpl) verify(block *common.Block, done chan *cached.Block){
 	defer close(done)
-	uBlock, err := cached.NewBlock(block)
+	cblock, err := cached.GetBlock(block)
 	if err != nil {
 		logger.Warning("Failed unmarshalling block bytes on channel [%s]: [%s]",  b.chainID, err)
 	}
-	if err := b.mcs.VerifyUnmarshaledBlock(gossipcommon.ChainID(b.chainID), uBlock); err != nil {
-		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, uBlock.Raw.Header.Number, err)
+	if err := b.mcs.VerifyUnmarshaledBlock(gossipcommon.ChainID(b.chainID), cblock); err != nil {
+		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, cblock.Header.Number, err)
 		return
 	}
 
-	done <- uBlock
+	done <- cblock
 }
 
 func (b *blocksProviderImpl) gossipBlock(block *common.Block) {

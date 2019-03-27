@@ -87,7 +87,7 @@ type Coordinator interface {
 	// the order of private data in slice of PvtDataCollections doesn't implies the order of
 	// transactions in the block related to these private data, to get the correct placement
 	// need to read TxPvtData.SeqInBlock field
-	GetPvtDataAndBlockByNum(seqNum uint64, peerAuth common.SignedData) (*cached.Block, util.PvtDataCollections, error)
+	GetPvtDataAndBlockByNum(seqNum uint64, peerAuth common.SignedData) (*common.Block, util.PvtDataCollections, error)
 
 	// Get recent block sequence number
 	LedgerHeight() (uint64, error)
@@ -155,7 +155,7 @@ func (c *coordinator) ValidateBlock(block *cached.Block) error{
 
 // StoreBlock stores block with private data into the ledger
 func (c *coordinator) StoreBlock(block *cached.Block, privateDataSets util.PvtDataCollections) error {
-	if block.Raw.Data == nil {
+	if block.Data == nil {
 		return errors.New("Block data is empty")
 	}
 	if block.Header == nil {
@@ -178,7 +178,7 @@ func (c *coordinator) StoreBlock(block *cached.Block, privateDataSets util.PvtDa
 		return err
 	}
 
-	privateInfo, err := c.listMissingPrivateData(block.Raw, ownedRWsets)
+	privateInfo, err := c.listMissingPrivateData(block.Block, ownedRWsets)
 	if err != nil {
 		logger.Warning(err)
 		return err
@@ -369,26 +369,26 @@ func (c *coordinator) fetchFromTransientStore(txAndSeq txAndSeqInBlock, filter l
 
 // computeOwnedRWsets identifies which block private data we already have
 func computeOwnedRWsets(block *cached.Block, blockPvtData util.PvtDataCollections) (rwsetByKeys, error) {
-	lastBlockSeq := len(block.Raw.Data.Data) - 1
+	lastBlockSeq := len(block.Data.Data) - 1
 
 	ownedRWsets := make(map[rwSetKey][]byte)
 	for _, txPvtData := range blockPvtData {
 		if lastBlockSeq < int(txPvtData.SeqInBlock) {
-			logger.Warningf("Claimed SeqInBlock %d but block has only %d transactions", txPvtData.SeqInBlock, len(block.Raw.Data.Data))
+			logger.Warningf("Claimed SeqInBlock %d but block has only %d transactions", txPvtData.SeqInBlock, len(block.Data.Data))
 			continue
 		}
-		tx := block.Txs[txPvtData.SeqInBlock]
-		if tx.Envelope.Err != nil {
-			return nil, tx.Envelope.Err
+		env, err := block.UnmarshalSpecificEnvelope(int(txPvtData.SeqInBlock))
+		if err != nil {
+			return nil, err
 		}
-		payload := tx.Envelope.Payload
-		if payload.Err != nil {
-			return nil, payload.Err
+		payload, err := env.UnmarshalPayload()
+		if err != nil {
+			return nil, err
 		}
 
-		chdr := payload.Header.ChannelHeader
-		if chdr.Err != nil {
-			return nil, chdr.Err
+		chdr, err := payload.Header.UnmarshalChannelHeader()
+		if err != nil {
+			return nil, err
 		}
 		for _, ns := range txPvtData.WriteSet.NsPvtRwset {
 			for _, col := range ns.CollectionPvtRwset {
@@ -828,14 +828,14 @@ func (ac aggregatedCollections) asPrivateData() []*ledger.TxPvtData {
 // the order of private data in slice of PvtDataCollections doesn't implies the order of
 // transactions in the block related to these private data, to get the correct placement
 // need to read TxPvtData.SeqInBlock field
-func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*cached.Block, util.PvtDataCollections, error) {
+func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common.SignedData) (*common.Block, util.PvtDataCollections, error) {
 	blockAndPvtData, err := c.Committer.GetPvtDataAndBlockByNum(seqNum)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	seqs2Namespaces := aggregatedCollections(make(map[seqAndDataModel]map[string][]*rwset.CollectionPvtReadWriteSet))
-	data := blockData(blockAndPvtData.Block.Raw.Data.Data)
+	data := blockData(blockAndPvtData.Block.Data.Data)
 	data.forEachTxn(make(txValidationFlags, len(data)), func(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, _ []*peer.Endorsement) error {
 		item, exists := blockAndPvtData.PvtData[seqInBlock]
 		if !exists {
@@ -870,7 +870,7 @@ func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common
 		return nil
 	})
 
-	return blockAndPvtData.Block, seqs2Namespaces.asPrivateData(), nil
+	return blockAndPvtData.Block.Block, seqs2Namespaces.asPrivateData(), nil
 }
 
 // containsWrites checks whether the given CollHashedRwSet contains writes

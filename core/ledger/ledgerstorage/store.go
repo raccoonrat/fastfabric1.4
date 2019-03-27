@@ -137,7 +137,7 @@ func (s *Store) CommitWithPvtData(blockAndPvtdata *ledger.BlockAndPvtData) error
 		logger.Debugf("Skipping writing block [%d] to pvt block store as the store height is [%d]", blockNum, pvtBlkStoreHt)
 	}
 
-	if err := s.AddBlock(blockAndPvtdata.Block); err != nil {
+	if err := s.AddBlock(blockAndPvtdata.Block.Block); err != nil {
 		s.pvtdataStore.Rollback()
 		return err
 	}
@@ -154,8 +154,8 @@ func constructValidTxPvtDataAndMissingData(blockAndPvtData *ledger.BlockAndPvtDa
 	var validTxPvtData []*ledger.TxPvtData
 	validTxMissingPvtData := make(ledger.TxMissingPvtDataMap)
 
-	txsFilter := lutil.TxValidationFlags(blockAndPvtData.Block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
-	numTxs := uint64(len(blockAndPvtData.Block.Txs))
+	txsFilter := lutil.TxValidationFlags(blockAndPvtData.Block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	numTxs := uint64(len(blockAndPvtData.Block.Data.Data))
 
 	// for all valid tx, construct pvtdata and missing pvtdata list
 	for txNum := uint64(0); txNum < numTxs; txNum++ {
@@ -192,7 +192,7 @@ func (s *Store) GetPvtDataAndBlockByNum(blockNum uint64, filter ledger.PvtNsColl
 	s.rwlock.RLock()
 	defer s.rwlock.RUnlock()
 
-	var block *cached.Block
+	var block *common.Block
 	var pvtdata []*ledger.TxPvtData
 	var err error
 	if block, err = s.RetrieveBlockByNumber(blockNum); err != nil {
@@ -201,7 +201,7 @@ func (s *Store) GetPvtDataAndBlockByNum(blockNum uint64, filter ledger.PvtNsColl
 	if pvtdata, err = s.getPvtDataByNumWithoutLock(blockNum, filter); err != nil {
 		return nil, err
 	}
-	return &ledger.BlockAndPvtData{Block: block, PvtData: constructPvtdataMap(pvtdata)}, nil
+	return &ledger.BlockAndPvtData{Block: cached.GetBlock(block), PvtData: constructPvtdataMap(pvtdata)}, nil
 }
 
 // GetPvtDataByNum returns only the pvt data  corresponding to the given block number

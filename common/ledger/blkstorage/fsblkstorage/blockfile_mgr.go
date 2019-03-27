@@ -9,7 +9,6 @@ package fsblkstorage
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -450,7 +449,7 @@ func (mgr *blockfileMgr) updateBlockchainInfo(latestBlockHash []byte, latestBloc
 	mgr.bcInfo.Store(newBCInfo)
 }
 
-func (mgr *blockfileMgr) retrieveBlockByHash(blockHash []byte) (*cached.Block, error) {
+func (mgr *blockfileMgr) retrieveBlockByHash(blockHash []byte) (*common.Block, error) {
 	logger.Debugf("retrieveBlockByHash() - blockHash = [%#v]", blockHash)
 	loc, err := mgr.index.getBlockLocByHash(blockHash)
 	if err != nil {
@@ -459,7 +458,7 @@ func (mgr *blockfileMgr) retrieveBlockByHash(blockHash []byte) (*cached.Block, e
 	return mgr.fetchBlock(loc)
 }
 
-func (mgr *blockfileMgr) retrieveBlockByNumber(blockNum uint64) (*cached.Block, error) {
+func (mgr *blockfileMgr) retrieveBlockByNumber(blockNum uint64) (*common.Block, error) {
 	logger.Debugf("retrieveBlockByNumber() - blockNum = [%d]", blockNum)
 
 	// interpret math.MaxUint64 as a request for last block
@@ -474,7 +473,7 @@ func (mgr *blockfileMgr) retrieveBlockByNumber(blockNum uint64) (*cached.Block, 
 	return mgr.fetchBlock(loc)
 }
 
-func (mgr *blockfileMgr) retrieveBlockByTxID(txID string) (*cached.Block, error) {
+func (mgr *blockfileMgr) retrieveBlockByTxID(txID string) (*common.Block, error) {
 	logger.Debugf("retrieveBlockByTxID() - txID = [%s]", txID)
 
 	loc, err := mgr.index.getBlockLocByTxID(txID)
@@ -529,7 +528,7 @@ func (mgr *blockfileMgr) retrieveTransactionByBlockNumTranNum(blockNum uint64, t
 	return mgr.fetchTransactionEnvelope(loc)
 }
 
-func (mgr *blockfileMgr) fetchBlock(lp *fileLocPointer) (*cached.Block, error) {
+func (mgr *blockfileMgr) fetchBlock(lp *fileLocPointer) (*common.Block, error) {
 	blockBytes, err := mgr.fetchBlockBytes(lp)
 	if err != nil {
 		return nil, err
@@ -538,12 +537,7 @@ func (mgr *blockfileMgr) fetchBlock(lp *fileLocPointer) (*cached.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	ublock, err := cached.NewBlock(block)
-	if err != nil {
-		return nil, err
-	}
-	return ublock, nil
+	return block, nil
 }
 
 func (mgr *blockfileMgr) fetchTransactionEnvelope(lp *fileLocPointer) (*common.Envelope, error) {

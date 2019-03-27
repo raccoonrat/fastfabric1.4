@@ -54,7 +54,7 @@ func (c *current) blockNum() uint64 {
 }
 
 func (c *current) maxTxNumber() uint64 {
-	return uint64(len(c.block.Txs)) - 1
+	return uint64(len(c.block.Data.Data)) - 1
 }
 
 // NewLockBasedTxMgr constructs a new instance of NewLockBasedTxMgr
@@ -121,7 +121,7 @@ func (txmgr *LockBasedTxMgr) ValidateAndPrepare(blockAndPvtdata *ledger.BlockAnd
 	logger.Debug("lock acquired on oldBlockCommit for validating read set version against the committed version")
 
 	block := blockAndPvtdata.Block
-	logger.Debugf("Validating new block with num trans = [%d]", len(block.Raw.Data.Data))
+	logger.Debugf("Validating new block with num trans = [%d]", len(block.Data.Data))
 	batch, txstatsInfo, err := txmgr.validator.ValidateAndPrepareBatch(blockAndPvtdata, doMVCCValidation)
 	if err != nil {
 		txmgr.reset()

@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	ffgossip "github.com/hyperledger/fabric/fastfabric-extensions/gossip"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/cauthdsl"
 	ccdef "github.com/hyperledger/fabric/common/chaincode"
@@ -863,7 +862,7 @@ func initGossipService(policyMgr policies.ChannelPolicyManagerGetter, peerServer
 		certs.TLSClientCert.Store(&clientCert)
 	}
 
-	messageCryptoService := ffgossip.NewMSPMessageCryptoService(
+	messageCryptoService := peergossip.NewMCS(
 		policyMgr,
 		localmsp.NewSigner(),
 		mgmt.NewDeserializersManager(),

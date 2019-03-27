@@ -8,7 +8,6 @@ package peer
 
 import (
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/customtx"
@@ -38,21 +37,15 @@ func newConfigTxProcessor() customtx.Processor {
 // However, if 'initializingLedger' is true (i.e., either the ledger is being created from the genesis block
 // or the ledger is synching the state with the blockchain, during start up), the full config is computed using
 // the most recent configs from statedb
-func (tp *configtxProcessor) GenerateSimulationResults(txEnv *cached.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
-	payload := txEnv.Payload
-	if payload.Err != nil{
-		panic(payload.Err)
-	}
-	channelHdr := payload.Header.ChannelHeader
-	if channelHdr.Err != nil{
-		panic(channelHdr.Err)
-	}
+func (tp *configtxProcessor) GenerateSimulationResults(txEnv *common.Envelope, simulator ledger.TxSimulator, initializingLedger bool) error {
+	payload := utils.UnmarshalPayloadOrPanic(txEnv.Payload)
+	channelHdr := utils.UnmarshalChannelHeaderOrPanic(payload.Header.ChannelHeader)
 	txType := common.HeaderType(channelHdr.GetType())
 
 	switch txType {
 	case common.HeaderType_CONFIG:
 		peerLogger.Debugf("Processing CONFIG")
-		return processChannelConfigTx(txEnv.Raw, simulator)
+		return processChannelConfigTx(txEnv, simulator)
 
 	default:
 		return fmt.Errorf("tx type [%s] is not expected", txType)

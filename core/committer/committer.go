@@ -18,7 +18,7 @@ package committer
 
 import (
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/protos/common"
 )
 
 // Committer is the interface supported by committers
@@ -46,7 +46,7 @@ type Committer interface {
 	LedgerHeight() (uint64, error)
 
 	// Gets blocks with sequence numbers provided in the slice
-	GetBlocks(blockSeqs []uint64) []*cached.Block
+	GetBlocks(blockSeqs []uint64) []*common.Block
 
 	// GetConfigHistoryRetriever returns the ConfigHistoryRetriever
 	GetConfigHistoryRetriever() (ledger.ConfigHistoryRetriever, error)

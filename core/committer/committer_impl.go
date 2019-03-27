@@ -34,7 +34,7 @@ type PeerLedgerSupport interface {
 
 	GetBlockchainInfo() (*common.BlockchainInfo, error)
 
-	GetBlockByNumber(blockNumber uint64) (*cached.Block, error)
+	GetBlockByNumber(blockNumber uint64) (*common.Block, error)
 
 	GetConfigHistoryRetriever() (ledger.ConfigHistoryRetriever, error)
 
@@ -72,9 +72,7 @@ func NewLedgerCommitterReactive(ledger PeerLedgerSupport, eventer ConfigBlockEve
 // content
 func (lc *LedgerCommitter) preCommit(block *cached.Block) error {
 	// Updating CSCC with new configuration block
-	hdr :=block.Txs[0].Envelope.Payload.Header.ChannelHeader
-
-	if common.HeaderType(hdr.Type) == common.HeaderType_CONFIG || common.HeaderType(hdr.Type) == common.HeaderType_ORDERER_TRANSACTION {
+	if block.IsConfigBlock() {
 		logger.Debug("Received configuration update, calling CSCC ConfigUpdate")
 		if err := lc.eventer(block); err != nil {
 			return errors.WithMessage(err, "could not update CSCC with new configuration update")
@@ -117,8 +115,8 @@ func (lc *LedgerCommitter) LedgerHeight() (uint64, error) {
 }
 
 // GetBlocks used to retrieve blocks with sequence numbers provided in the slice
-func (lc *LedgerCommitter) GetBlocks(blockSeqs []uint64) []*cached.Block {
-	var blocks []*cached.Block
+func (lc *LedgerCommitter) GetBlocks(blockSeqs []uint64) []*common.Block {
+	var blocks []*common.Block
 
 	for _, seqNum := range blockSeqs {
 		if blck, err := lc.GetBlockByNumber(seqNum); err != nil {

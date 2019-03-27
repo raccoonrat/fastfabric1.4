@@ -59,10 +59,7 @@ func TestBlockSignature(t *testing.T) {
 	block := cb.NewBlock(7, []byte("foo"))
 	bw.addBlockSignature(block)
 
-	md, err := utils.GetMetadataFromBlock(block, cb.BlockMetadataIndex_SIGNATURES)
-	if err != nil {
-		panic(err)
-	}
+	md := utils.GetMetadataFromBlockOrPanic(block, cb.BlockMetadataIndex_SIGNATURES)
 	assert.Nil(t, md.Value, "Value is empty in this case")
 	assert.NotNil(t, md.Signatures, "Should have signature")
 }
@@ -88,10 +85,7 @@ func TestBlockLastConfig(t *testing.T) {
 	assert.Equal(t, newBlockNum, bw.lastConfigBlockNum)
 	assert.Equal(t, newConfigSeq, bw.lastConfigSeq)
 
-	md, err := utils.GetMetadataFromBlock(block, cb.BlockMetadataIndex_LAST_CONFIG)
-	if err != nil {
-		panic(err)
-	}
+	md := utils.GetMetadataFromBlockOrPanic(block, cb.BlockMetadataIndex_LAST_CONFIG)
 	assert.NotNil(t, md.Value, "Value not be empty in this case")
 	assert.NotNil(t, md.Signatures, "Should have signature")
 
@@ -191,10 +185,7 @@ func TestGoodWriteConfig(t *testing.T) {
 	assert.Equal(t, block.Header, cBlock.Header)
 	assert.Equal(t, block.Data, cBlock.Data)
 
-	omd,err := utils.GetMetadataFromBlock(block, cb.BlockMetadataIndex_ORDERER)
-	if err != nil {
-		panic(err)
-	}
+	omd := utils.GetMetadataFromBlockOrPanic(block, cb.BlockMetadataIndex_ORDERER)
 	assert.Equal(t, consenterMetadata, omd.Value)
 }
 
@@ -240,9 +231,6 @@ func TestRaceWriteConfig(t *testing.T) {
 	expectedLastConfigBlockNumber = block2.Header.Number
 	testLastConfigBlockNumber(t, block2, expectedLastConfigBlockNumber)
 
-	omd, err := utils.GetMetadataFromBlock(block1, cb.BlockMetadataIndex_ORDERER)
-	if err != nil {
-		panic(err)
-	}
+	omd := utils.GetMetadataFromBlockOrPanic(block1, cb.BlockMetadataIndex_ORDERER)
 	assert.Equal(t, consenterMetadata1, omd.Value)
 }

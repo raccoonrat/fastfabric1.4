@@ -63,7 +63,7 @@ func (impl *DefaultImpl) ValidateAndPrepareBatch(blockAndPvtdata *ledger.BlockAn
 	postprocessProtoBlock(block, internalBlock)
 	logger.Debug("ValidateAndPrepareBatch() complete")
 
-	txsFilter := util.TxValidationFlags(block.Raw.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	txsFilter := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 	for i := range txsFilter {
 		txsStatInfo[i].ValidationCode = txsFilter.Flag(i)
 	}
