@@ -8,6 +8,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/remote/client"
 	"net"
 	"net/http"
 	"os"
@@ -32,7 +33,7 @@ import (
 	"github.com/hyperledger/fabric/core/aclmgmt"
 	"github.com/hyperledger/fabric/core/aclmgmt/resources"
 	"github.com/hyperledger/fabric/core/admin"
-	cc "github.com/hyperledger/fabric/core/cclifecycle"
+	"github.com/hyperledger/fabric/core/cclifecycle"
 	"github.com/hyperledger/fabric/core/chaincode"
 	"github.com/hyperledger/fabric/core/chaincode/accesscontrol"
 	"github.com/hyperledger/fabric/core/chaincode/lifecycle"
@@ -54,7 +55,7 @@ import (
 	endorsement2 "github.com/hyperledger/fabric/core/handlers/endorsement/api"
 	endorsement3 "github.com/hyperledger/fabric/core/handlers/endorsement/api/identities"
 	"github.com/hyperledger/fabric/core/handlers/library"
-	validation "github.com/hyperledger/fabric/core/handlers/validation/api"
+	"github.com/hyperledger/fabric/core/handlers/validation/api"
 	"github.com/hyperledger/fabric/core/ledger/cceventmgmt"
 	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/core/operations"
@@ -98,12 +99,14 @@ const (
 )
 
 var chaincodeDevMode bool
+var storageAddress string
 
 func startCmd() *cobra.Command {
 	// Set the flags on the node start command.
 	flags := nodeStartCmd.Flags()
 	flags.BoolVarP(&chaincodeDevMode, "peer-chaincodedev", "", false,
 		"Whether peer in chaincode development mode")
+	flags.StringVarP(&storageAddress,"storage", "s", "localhost:10000", "Define where the ledger is persistently stored, default is localhost:10000")
 
 	return nodeStartCmd
 }
@@ -123,6 +126,8 @@ var nodeStartCmd = &cobra.Command{
 }
 
 func serve(args []string) error {
+	remote.StartPersistentPeerClient(storageAddress)
+
 	// currently the peer only works with the standard MSP
 	// because in certain scenarios the MSP has to make sure
 	// that from a single credential you only have a single 'identity'.
