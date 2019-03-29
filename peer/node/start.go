@@ -8,7 +8,8 @@ package node
 
 import (
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/remote/client"
+	ffconfig "github.com/hyperledger/fabric/fastfabric-extensions/config"
+	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"net"
 	"net/http"
 	"os"
@@ -99,14 +100,16 @@ const (
 )
 
 var chaincodeDevMode bool
-var storageAddress string
 
 func startCmd() *cobra.Command {
 	// Set the flags on the node start command.
 	flags := nodeStartCmd.Flags()
 	flags.BoolVarP(&chaincodeDevMode, "peer-chaincodedev", "", false,
 		"Whether peer in chaincode development mode")
-	flags.StringVarP(&storageAddress,"storage", "s", "localhost:10000", "Define where the ledger is persistently stored, default is localhost:10000")
+	flags.BoolVarP(&ffconfig.IsStorage, "isStorage", "s", false, "Defines if this peer persist its storage")
+	flags.BoolVarP(&ffconfig.IsEndorser, "isEndorser", "e", false, "Defines if this peer is a decoupled endorser")
+	flags.StringSliceVar(&ffconfig.StorageAddresses,"storageAddr", []string{"localhost:10000"}, "Defines where the ledger is persistently stored")
+	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
 
 	return nodeStartCmd
 }
@@ -126,7 +129,11 @@ var nodeStartCmd = &cobra.Command{
 }
 
 func serve(args []string) error {
-	remote.StartPersistentPeerClient(storageAddress)
+	if !ffconfig.IsStorage && !ffconfig.IsEndorser {
+		for _, address := range ffconfig.StorageAddresses {
+			remote.StartStoragePeerClient(address)
+		}
+	}
 
 	// currently the peer only works with the standard MSP
 	// because in certain scenarios the MSP has to make sure
@@ -292,31 +299,35 @@ func serve(args []string) error {
 	}
 	reg := library.InitRegistry(libConf)
 
-	authFilters := reg.Lookup(library.Auth).([]authHandler.Filter)
-	endorserSupport := &endorser.SupportImpl{
-		SignerSupport:    signingIdentity,
-		Peer:             peer.Default,
-		PeerSupport:      peer.DefaultSupport,
-		ChaincodeSupport: chaincodeSupport,
-		SysCCProvider:    sccp,
-		ACLProvider:      aclProvider,
-	}
-	endorsementPluginsByName := reg.Lookup(library.Endorsement).(map[string]endorsement2.PluginFactory)
 	validationPluginsByName := reg.Lookup(library.Validation).(map[string]validation.PluginFactory)
-	signingIdentityFetcher := (endorsement3.SigningIdentityFetcher)(endorserSupport)
-	channelStateRetriever := endorser.ChannelStateRetriever(endorserSupport)
-	pluginMapper := endorser.MapBasedPluginMapper(endorsementPluginsByName)
-	pluginEndorser := endorser.NewPluginEndorser(&endorser.PluginSupport{
-		ChannelStateRetriever:   channelStateRetriever,
-		TransientStoreRetriever: peer.TransientStoreFactory,
-		PluginMapper:            pluginMapper,
-		SigningIdentityFetcher:  signingIdentityFetcher,
-	})
-	endorserSupport.PluginEndorser = pluginEndorser
-	serverEndorser := endorser.NewEndorserServer(privDataDist, endorserSupport, pr, metricsProvider)
-	auth := authHandler.ChainFilters(serverEndorser, authFilters...)
-	// Register the Endorser server
-	pb.RegisterEndorserServer(peerServer.Server(), auth)
+	if ffconfig.IsEndorser {
+		authFilters := reg.Lookup(library.Auth).([]authHandler.Filter)
+		endorserSupport := &endorser.SupportImpl{
+			SignerSupport:    signingIdentity,
+			Peer:             peer.Default,
+			PeerSupport:      peer.DefaultSupport,
+			ChaincodeSupport: chaincodeSupport,
+			SysCCProvider:    sccp,
+			ACLProvider:      aclProvider,
+		}
+		endorsementPluginsByName := reg.Lookup(library.Endorsement).(map[string]endorsement2.PluginFactory)
+		signingIdentityFetcher := (endorsement3.SigningIdentityFetcher)(endorserSupport)
+		channelStateRetriever := endorser.ChannelStateRetriever(endorserSupport)
+		pluginMapper := endorser.MapBasedPluginMapper(endorsementPluginsByName)
+		pluginEndorser := endorser.NewPluginEndorser(&endorser.PluginSupport{
+			ChannelStateRetriever:   channelStateRetriever,
+			TransientStoreRetriever: peer.TransientStoreFactory,
+			PluginMapper:            pluginMapper,
+			SigningIdentityFetcher:  signingIdentityFetcher,
+		})
+		endorserSupport.PluginEndorser = pluginEndorser
+
+		serverEndorser := endorser.NewEndorserServer(privDataDist, endorserSupport, pr, metricsProvider)
+		auth := authHandler.ChainFilters(serverEndorser, authFilters...)
+		// Register the Endorser server
+		pb.RegisterEndorserServer(peerServer.Server(), auth)
+
+	}
 
 	policyMgr := peer.NewChannelPolicyManagerGetter()
 

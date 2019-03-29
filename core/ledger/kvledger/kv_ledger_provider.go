@@ -9,8 +9,6 @@ package kvledger
 import (
 	"bytes"
 	"fmt"
-	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
-
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/confighistory"
@@ -20,9 +18,10 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
-	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"github.com/pkg/errors"
 )
 

@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package service
 
 import (
+	ffstate "github.com/hyperledger/fabric/fastfabric-extensions/state"
 	"sync"
 
 	"github.com/hyperledger/fabric/core/committer"
@@ -262,7 +263,7 @@ func (g *gossipServiceImpl) InitializeChannel(chainID string, endpoints []string
 	}
 	g.privateHandlers[chainID].reconciler.Start()
 
-	g.chains[chainID] = state.NewGossipStateProvider(chainID, servicesAdapter, coordinator)
+	g.chains[chainID] = ffstate.NewGossipStateProvider(chainID, servicesAdapter, coordinator)
 	if g.deliveryService[chainID] == nil {
 		var err error
 		g.deliveryService[chainID], err = g.deliveryFactory.Service(g, endpoints, g.mcs)

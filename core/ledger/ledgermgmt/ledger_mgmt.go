@@ -8,6 +8,8 @@ package ledgermgmt
 
 import (
 	"bytes"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
+	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"sync"
 
 	"github.com/hyperledger/fabric/common/flogging"
@@ -78,6 +80,11 @@ func initialize(initializer *Initializer) {
 		HealthCheckRegistry:           initializer.HealthCheckRegistry,
 	})
 	ledgerProvider = provider
+	if config.IsStorage || config.IsEndorser{
+		remote.SetLedgerProvider(provider)
+		remote.StartServer(config.PeerAddress)
+	}
+
 	logger.Info("ledger mgmt initialized")
 }
 

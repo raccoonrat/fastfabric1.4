@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+import "protos/common/common.proto";
+
+package remote;
+
+service StoragePeer {
+    rpc Store (StorageRequest) returns (Result) {}
+    rpc CreateLedger (StorageRequest) returns (Result) {}
+}
+
+message StorageRequest {
+    common.Block block = 1;
+    string channelId = 2;
+}
+
+message Result {
+}
