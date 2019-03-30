@@ -1,7 +1,6 @@
 package cached
 
 import (
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 )
@@ -72,7 +71,7 @@ type ChaincodeEndorsedAction struct {
 
 type ChaincodeAction struct {
 	*peer.ChaincodeAction
-	cachedRwSet  *rwsetutil.TxRwSet
+	cachedRwSet  *TxRwSet
 	cachedEvents *peer.ChaincodeEvent
 }
 

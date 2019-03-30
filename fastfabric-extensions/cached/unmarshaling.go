@@ -3,7 +3,6 @@ package cached
 import (
 	"fmt"
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/pkg/errors"
@@ -360,12 +359,12 @@ func (respPl *ProposalResponsePayload) UnmarshalChaincodeAction() (*ChaincodeAct
 	return respPl.cachedAction, nil
 }
 
-func (act *ChaincodeAction) UnmarshalRwSet()(*rwsetutil.TxRwSet, error) {
+func (act *ChaincodeAction) UnmarshalRwSet()(*TxRwSet, error) {
 	if act.cachedRwSet != nil {
 		return act.cachedRwSet, nil
 	}
 
-	rwset := &rwsetutil.TxRwSet{}
+	rwset := &TxRwSet{}
 	if err := rwset.FromProtoBytes(act.Results); err != nil{
 		return nil, err
 	}

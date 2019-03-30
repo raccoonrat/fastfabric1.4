@@ -125,7 +125,7 @@ func preprocessProtoBlock(txMgr txmgr.TxMgr,
 			return nil, nil, err
 		}
 
-		var txRWSet *rwsetutil.TxRwSet
+		var txRWSet *cached.TxRwSet
 		txType := common.HeaderType(chdr.Type)
 		logger.Debugf("txType=%s", txType)
 		txStatInfo.TxType = txType
@@ -152,7 +152,7 @@ func preprocessProtoBlock(txMgr txmgr.TxMgr,
 				return nil, nil, err
 			}
 			if rwsetProto != nil {
-				if txRWSet, err = rwsetutil.TxRwSetFromProtoMsg(rwsetProto); err != nil {
+				if txRWSet, err = cached.TxRwSetFromProtoMsg(rwsetProto); err != nil {
 					return nil, nil, err
 				}
 			}
@@ -196,7 +196,7 @@ func processNonEndorserTx(txEnv *common.Envelope, txid string, txType common.Hea
 	return simRes.PubSimulationResults, nil
 }
 
-func validateWriteset(txRWSet *rwsetutil.TxRwSet, validateKVFunc func(key string, value []byte) error) error {
+func validateWriteset(txRWSet *cached.TxRwSet, validateKVFunc func(key string, value []byte) error) error {
 	for _, nsRwSet := range txRWSet.NsRwSets {
 		pubWriteset := nsRwSet.KvRwSet
 		if pubWriteset == nil {

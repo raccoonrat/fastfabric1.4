@@ -20,7 +20,6 @@ import (
 	"github.com/hyperledger/fabric/core/common/ccprovider"
 	"github.com/hyperledger/fabric/core/common/sysccprovider"
 	"github.com/hyperledger/fabric/core/handlers/validation/api"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -90,7 +89,7 @@ func (v *VsccValidatorImpl) VSCCValidateTx(seq int, payload *cached.Payload, env
 	if err != nil {
 		return errors.WithMessage(err, "GetActionFromEnvelope failed"), peer.TxValidationCode_BAD_RESPONSE_PAYLOAD
 	}
-	var txRWSet *rwsetutil.TxRwSet
+	var txRWSet *cached.TxRwSet
 	if err == nil{
 		txRWSet, err = ca.UnmarshalRwSet()
 	}
@@ -378,7 +377,7 @@ func (v *VsccValidatorImpl) GetInfoForValidate(chdr *common.ChannelHeader, ccID 
 
 // txWritesToNamespace returns true if the supplied NsRwSet
 // performs a ledger write
-func (v *VsccValidatorImpl) txWritesToNamespace(ns *rwsetutil.NsRwSet) bool {
+func (v *VsccValidatorImpl) txWritesToNamespace(ns *cached.NsRwSet) bool {
 	// check for public writes first
 	if ns.KvRwSet != nil && len(ns.KvRwSet.Writes) > 0 {
 		return true

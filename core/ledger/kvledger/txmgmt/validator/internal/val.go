@@ -9,8 +9,8 @@ package internal
 import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/peer"
 )
 
@@ -34,7 +34,7 @@ type Block struct {
 type Transaction struct {
 	IndexInBlock   int
 	ID             string
-	RWSet          *rwsetutil.TxRwSet
+	RWSet          *cached.TxRwSet
 	ValidationCode peer.TxValidationCode
 }
 
@@ -86,7 +86,7 @@ func (t *Transaction) RetrieveHash(ns string, coll string) []byte {
 }
 
 // ApplyWriteSet adds (or deletes) the key/values present in the write set to the PubAndHashUpdates
-func (u *PubAndHashUpdates) ApplyWriteSet(txRWSet *rwsetutil.TxRwSet, txHeight *version.Height, db privacyenabledstate.DB) error {
+func (u *PubAndHashUpdates) ApplyWriteSet(txRWSet *cached.TxRwSet, txHeight *version.Height, db privacyenabledstate.DB) error {
 	txops, err := prepareTxOps(txRWSet, txHeight, u, db)
 	logger.Debugf("txops=%#v", txops)
 	if err != nil {
