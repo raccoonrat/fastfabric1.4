@@ -11,6 +11,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric-lib-go/healthz"
 	commonledger "github.com/hyperledger/fabric/common/ledger"
+	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/common/metrics"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
@@ -96,6 +97,7 @@ type PeerLedger interface {
 	CommitPvtDataOfOldBlocks(blockPvtData []*BlockPvtData) ([]*PvtdataHashMismatch, error)
 	// GetMissingPvtDataTracker return the MissingPvtDataTracker
 	GetMissingPvtDataTracker() (MissingPvtDataTracker, error)
+	GetBlockstore() (store blkstorage.BlockStore)
 }
 
 // ValidatedLedger represents the 'final ledger' after filtering out invalid transactions from PeerLedger.

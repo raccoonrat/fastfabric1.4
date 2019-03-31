@@ -4,17 +4,32 @@ import (
 	"google.golang.org/grpc"
 )
 
-var clients = make([]StoragePeerClient,0)
+var endorserClients = make([]StoragePeerClient,0)
+var storageClient StoragePeerClient
+
 
 func StartStoragePeerClient(address string) error {
 	conn, err := grpc.Dial(address, grpc.WithInsecure())
 	if err != nil {
 		return err
 	}
-	clients = append(clients, NewStoragePeerClient(conn))
+	storageClient = NewStoragePeerClient(conn)
 	return nil
 }
 
-func GetStoragePeerClients() []StoragePeerClient{
-	return clients
+func StartEndorserPeerClient(address string) error {
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		return err
+	}
+	endorserClients = append(endorserClients, NewStoragePeerClient(conn))
+	return nil
+}
+
+func GetStoragePeerClient() StoragePeerClient{
+	return storageClient
+}
+
+func GetEndorserPeerClients() []StoragePeerClient{
+	return endorserClients
 }

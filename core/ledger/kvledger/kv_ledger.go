@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package kvledger
 
 import (
+	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"sync"
 	"time"
 
@@ -197,6 +198,10 @@ func (l *kvLedger) recommitLostBlocks(firstBlockNum uint64, lastBlockNum uint64,
 	}
 	logger.Infof("Recommitted lost blocks - firstBlockNum=%d, lastBlockNum=%d, recoverables=%#v", firstBlockNum, lastBlockNum, recoverables)
 	return nil
+}
+
+func (l *kvLedger) GetBlockstore() (store blkstorage.BlockStore) {
+	return l.blockStore
 }
 
 // GetTransactionByID retrieves a transaction by id

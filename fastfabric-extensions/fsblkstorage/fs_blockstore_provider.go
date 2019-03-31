@@ -18,19 +18,16 @@ package fsblkstorage
 
 import (
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
-	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 )
 
 // FsBlockstoreProvider provides handle to block storage - this is not thread-safe
 type FsBlockstoreProvider struct {
-	indexConfig     *blkstorage.IndexConfig
-	ffdbProvider	*statedb.Provider
-	openStores		map[string]bool
+	stores []*BlockStore
 }
 
-func NewProvider(indexConfig *blkstorage.IndexConfig) blkstorage.BlockStoreProvider {
-	p := statedb.NewProvider("")
-	return &FsBlockstoreProvider{ indexConfig, p, make(map[string]bool)}
+// NewProvider constructs a filesystem based block store provider
+func NewProvider() blkstorage.BlockStoreProvider {
+	return &FsBlockstoreProvider{}
 }
 
 // CreateBlockStore simply calls OpenBlockStore
@@ -42,29 +39,30 @@ func (p *FsBlockstoreProvider) CreateBlockStore(ledgerid string) (blkstorage.Blo
 // If a blockstore is not existing, this method creates one
 // This method should be invoked only once for a particular ledgerid
 func (p *FsBlockstoreProvider) OpenBlockStore(ledgerid string) (blkstorage.BlockStore, error) {
-	indexStoreHandle := p.ffdbProvider.GetDBHandle(ledgerid)
-	p.openStores[ledgerid] = true
-	return newFsBlockStore(ledgerid, p.indexConfig, indexStoreHandle), nil
+	newStore := newFsBlockStore(ledgerid)
+	p.stores = append(p.stores, newStore)
+	return newStore, nil
 }
 
 // Exists tells whether the BlockStore with given id exists
 func (p *FsBlockstoreProvider) Exists(ledgerid string) (bool, error) {
-	_,exists := p.openStores[ledgerid]
-	return exists, nil
+	for _,store := range p.stores{
+		if store.ledgerId == ledgerid{
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // List lists the ids of the existing ledgers
 func (p *FsBlockstoreProvider) List() ([]string, error) {
-	keys := make([]string, len(p.openStores))
-	i:=0
-	for k, _:=range p.openStores{
-		keys[i] = k
-		i+=1
+	var ids []string
+	for _,store := range p.stores{
+		ids = append(ids, store.ledgerId)
 	}
-	return keys, nil
+	return ids, nil
 }
 
 // Close closes the FsBlockstoreProvider
 func (p *FsBlockstoreProvider) Close() {
-	p.ffdbProvider.Close()
 }

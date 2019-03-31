@@ -108,7 +108,8 @@ func startCmd() *cobra.Command {
 		"Whether peer in chaincode development mode")
 	flags.BoolVarP(&ffconfig.IsStorage, "isStorage", "s", false, "Defines if this peer persist its storage")
 	flags.BoolVarP(&ffconfig.IsEndorser, "isEndorser", "e", false, "Defines if this peer is a decoupled endorser")
-	flags.StringSliceVar(&ffconfig.StorageAddresses,"storageAddr", []string{"localhost:10000"}, "Defines where the ledger is persistently stored")
+	flags.StringSliceVar(&ffconfig.EndorserAddresses,"endorserAddr", []string{"localhost:10000"}, "Defines the addresses of the decoupled endorser servers")
+	flags.StringVar(&ffconfig.StorageAddress,"storageAddr", "localhost:10000", "Defines where the address of the decoupled persistent ledger stored")
 	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
 
 	return nodeStartCmd
@@ -129,10 +130,13 @@ var nodeStartCmd = &cobra.Command{
 }
 
 func serve(args []string) error {
-	if !ffconfig.IsStorage && !ffconfig.IsEndorser {
-		for _, address := range ffconfig.StorageAddresses {
-			remote.StartStoragePeerClient(address)
+	if !ffconfig.IsStorage {
+		if !ffconfig.IsEndorser {
+			for _, address := range ffconfig.EndorserAddresses {
+				remote.StartEndorserPeerClient(address)
+			}
 		}
+		remote.StartStoragePeerClient(ffconfig.StorageAddress)
 	}
 
 	// currently the peer only works with the standard MSP

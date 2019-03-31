@@ -57,7 +57,7 @@ func NewProvider() *Provider {
 			fsblkstorage.NewConf(ledgerconfig.GetBlockStorePath(), ledgerconfig.GetMaxBlockfileSize()),
 			indexConfig)
 	} else {
-		blockStoreProvider = fffsblkstorage.NewProvider(indexConfig)
+		blockStoreProvider = fffsblkstorage.NewProvider()
 	}
 
 	pvtStoreProvider := pvtdatastorage.NewProvider()
