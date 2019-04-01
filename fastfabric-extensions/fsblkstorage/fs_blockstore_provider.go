@@ -22,7 +22,7 @@ import (
 
 // FsBlockstoreProvider provides handle to block storage - this is not thread-safe
 type FsBlockstoreProvider struct {
-	stores []*BlockStore
+	stores []*BlockStoreImpl
 }
 
 // NewProvider constructs a filesystem based block store provider
