@@ -1,8 +1,8 @@
 package state
 
 import (
-	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/gossip/state"
 	"github.com/hyperledger/fabric/gossip/util"
 	"github.com/hyperledger/fabric/protos/common"
@@ -38,13 +38,33 @@ type ledgerResources interface {
 type GossipStateProviderImpl struct {
 	state.GossipStateProvider
 	chainID string
+	buffer PayloadsBuffer
 
 	mediator *state.ServicesMediator
 	ledgerResources
 }
 
 func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources) state.GossipStateProvider {
-	gsp := &GossipStateProviderImpl{state.NewGossipStateProvider(chainID, services, ledger), chainID, services,  ledger}
+	height, err := ledger.LedgerHeight()
+	if height == 0 {
+		// Panic here since this is an indication of invalid situation which should not happen in normal
+		// code path.
+		logger.Panic("Committer height cannot be zero, ledger should include at least one block (genesis).")
+	}
+
+	if err != nil {
+		logger.Error("Could not read ledger info to obtain current ledger height due to: ", errors.WithStack(err))
+		// Exiting as without ledger it will be impossible
+		// to deliver new blocks
+		return nil
+	}
+
+	gsp := &GossipStateProviderImpl{
+		GossipStateProvider: state.NewGossipStateProvider(chainID, services, ledger),
+		chainID: chainID,
+		mediator: services,
+		ledgerResources: ledger,
+		buffer:NewPayloadsBuffer(height)}
 	go gsp.deliverPayloads()
 	return gsp
 }
@@ -61,23 +81,30 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 }
 
 func (s *GossipStateProviderImpl) commit() {
+	go s.store()
+
 	for blockPromise := range parallel.ReadyToCommit{
 		block, more := <- blockPromise
 		if !more{
 			continue
 		}
 
-		// Commit block with available private transactions
-		if err := s.ledgerResources.StoreBlock(block, util.PvtDataCollections{}); err != nil {
-			logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
-			return
-		}
-
-		// Update ledger height
-		s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
-		logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
-			s.chainID, block.Header.Number, len(block.Data.Data))
+		s.buffer.Push(block)
 	}
+}
+func (s *GossipStateProviderImpl) store() {
+	<- s.buffer.Ready()
+	block := s.buffer.Pop()
+	// Commit block with available private transactions
+	if err := s.ledgerResources.StoreBlock(block, util.PvtDataCollections{}); err != nil {
+		logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
+		return
+	}
+
+	// Update ledger height
+	s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
+	logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
+		s.chainID, block.Header.Number, len(block.Data.Data))
 }
 
 func (s *GossipStateProviderImpl) validate(pipeline *parallel.Pipeline) {
