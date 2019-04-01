@@ -54,9 +54,8 @@ func NewProvider(dbPath string) *Provider {
 func (p *Provider) GetDBHandle(dbName string) *DBHandle {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	dbHandle := p.dbHandles[dbName]
 
-	if dbHandle == nil {
+	if p.dbHandles[dbName] == nil {
 		if config.IsStorage {
 			lvlHandle := p.lvlProv.GetDBHandle(dbName)
 			p.dbHandles[dbName] = &DBHandle{dbName:dbName, lvlHandle:lvlHandle}
@@ -65,7 +64,7 @@ func (p *Provider) GetDBHandle(dbName string) *DBHandle {
 		}
 	}
 
-	return dbHandle
+	return p.dbHandles[dbName]
 }
 
 func (p *Provider) Close() {
