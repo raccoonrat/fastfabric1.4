@@ -304,7 +304,7 @@ func serve(args []string) error {
 	reg := library.InitRegistry(libConf)
 
 	validationPluginsByName := reg.Lookup(library.Validation).(map[string]validation.PluginFactory)
-	if ffconfig.IsEndorser {
+	//if ffconfig.IsEndorser {
 		authFilters := reg.Lookup(library.Auth).([]authHandler.Filter)
 		endorserSupport := &endorser.SupportImpl{
 			SignerSupport:    signingIdentity,
@@ -331,7 +331,7 @@ func serve(args []string) error {
 		// Register the Endorser server
 		pb.RegisterEndorserServer(peerServer.Server(), auth)
 
-	}
+	//}
 
 	policyMgr := peer.NewChannelPolicyManagerGetter()
 
