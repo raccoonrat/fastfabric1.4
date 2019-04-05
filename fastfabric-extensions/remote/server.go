@@ -33,20 +33,20 @@ type server struct {
 }
 
 func (s *server) IteratorNext(ctx context.Context, itr  *Iterator) (*common.Block, error) {
-	fmt.Print("Call to IteratorNext")
+	fmt.Println("Call to IteratorNext")
 	res, err := s.iterators[itr.IteratorId].Next()
 	return res.(*common.Block), err
 }
 
 func (s *server) IteratorClose(ctx context.Context, itr *Iterator) (*Result, error) {
-	fmt.Print("Call to IteratorClose")
+	fmt.Println("Call to IteratorClose")
 	s.iterators[itr.IteratorId].Close()
 	s.iterators[itr.IteratorId] = nil
 	return &Result{}, nil
 }
 
 func (s *server) RetrieveBlocks(ctx context.Context, req *RetrieveBlocksRequest) (*Iterator, error) {
-	fmt.Print("Call to RetrieveBlocks")
+	fmt.Println("Call to RetrieveBlocks")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		itr, err := store.RetrieveBlocks(req.StartNum)
 		s.iterators = append(s.iterators, itr)
@@ -56,7 +56,7 @@ func (s *server) RetrieveBlocks(ctx context.Context, req *RetrieveBlocksRequest)
 }
 
 func (s *server) RetrieveTxValidationCodeByTxID(ctx context.Context, req *RetrieveTxValidationCodeByTxIDRequest) (*ValidationCode, error) {
-	fmt.Print("Call to RetrieveTxValidationCodeByTxID")
+	fmt.Println("Call to RetrieveTxValidationCodeByTxID")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		code, err := store.RetrieveTxValidationCodeByTxID(req.TxID)
 		return &ValidationCode{ValidationCode:int32(code)}, err
@@ -65,7 +65,7 @@ func (s *server) RetrieveTxValidationCodeByTxID(ctx context.Context, req *Retrie
 }
 
 func (s *server) RetrieveBlockByTxID(ctx context.Context, req *RetrieveBlockByTxIDRequest) (*common.Block, error) {
-	fmt.Print("Call to RetrieveBlockByTxID")
+	fmt.Println("Call to RetrieveBlockByTxID")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		store.RetrieveBlockByTxID(req.TxID)
 	}
@@ -80,7 +80,7 @@ func (s *server) getBlockstore(ledgerId string) fastfabric_extensions.BlockStore
 }
 
 func (s *server) RetrieveTxByBlockNumTranNum(ctx context.Context, req *RetrieveTxByBlockNumTranNumRequest) (*common.Envelope, error) {
-	fmt.Print("Call to RetrieveTxByBlockNumTranNum")
+	fmt.Println("Call to RetrieveTxByBlockNumTranNum")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		return store.RetrieveTxByBlockNumTranNum(req.BlockNo, req.TxNo)
 	}
@@ -88,7 +88,7 @@ func (s *server) RetrieveTxByBlockNumTranNum(ctx context.Context, req *RetrieveT
 }
 
 func (s *server) RetrieveTxByID(ctx context.Context, req *RetrieveTxByIDRequest) (*common.Envelope, error) {
-	fmt.Print("Call to RetrieveTxByID")
+	fmt.Println("Call to RetrieveTxByID")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		return store.RetrieveTxByID(req.TxID)
 	}
@@ -96,7 +96,7 @@ func (s *server) RetrieveTxByID(ctx context.Context, req *RetrieveTxByIDRequest)
 }
 
 func (s *server) RetrieveBlockByNumber(ctx context.Context, req *RetrieveBlockByNumberRequest) (*common.Block, error) {
-	fmt.Print("Call to RetrieveBlockByNumber")
+	fmt.Println("Call to RetrieveBlockByNumber")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		return store.RetrieveBlockByNumber(req.BlockNo)
 	}
@@ -104,7 +104,7 @@ func (s *server) RetrieveBlockByNumber(ctx context.Context, req *RetrieveBlockBy
 }
 
 func (s *server) GetBlockchainInfo(ctx context.Context, req *GetBlockchainInfoRequest) (*common.BlockchainInfo, error) {
-	fmt.Print("Call to GetBlockchainInfo")
+	fmt.Println("Call to GetBlockchainInfo")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		return store.GetBlockchainInfo()
 	}
@@ -115,7 +115,7 @@ func (s *server) GetBlockchainInfo(ctx context.Context, req *GetBlockchainInfoRe
 }
 
 func (s *server) RetrieveBlockByHash(ctx context.Context, req *RetrieveBlockByHashRequest) (*common.Block, error) {
-	fmt.Print("Call to RetrieveBlockByHash")
+	fmt.Println("Call to RetrieveBlockByHash")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
 		return store.RetrieveBlockByHash(req.BlockHash)
 	}
@@ -123,7 +123,7 @@ func (s *server) RetrieveBlockByHash(ctx context.Context, req *RetrieveBlockByHa
 }
 
 func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error) {
-	fmt.Print("Call to Store")
+	fmt.Println("Call to Store")
 	l := s.peerledger[req.LedgerId]
 	if l == nil {
 		return nil, fmt.Errorf("store not initialized yet.")
@@ -136,7 +136,7 @@ func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error
 }
 
 func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result, error) {
-	fmt.Print("Call to CreateLedger")
+	fmt.Println("Call to CreateLedger")
 	var err error
 	if s.ledgerProvider == nil {
 		return nil, fmt.Errorf("ledgerProvider must be set on this peer, is currently nil")

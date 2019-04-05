@@ -8,6 +8,7 @@ package kvledger
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -19,6 +20,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -126,6 +128,7 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger,
 		lgr.Close()
 		return nil, err
 	}
+	remote.GetStoragePeerClient().CreateLedger(context.Background(),&remote.StorageRequest{LedgerId:ledgerID, Block:genesisBlock} )
 	panicOnErr(provider.idStore.createLedgerID(ledgerID, genesisBlock), "Error while marking ledger as created")
 	return lgr, nil
 }
@@ -152,20 +155,18 @@ func (provider *Provider) openInternal(ledgerID string) (ledger.PeerLedger, erro
 	}
 	provider.collElgNotifier.registerListener(ledgerID, blockStore)
 
-	logger.Debug("Before provider.vdbProvider.GetDBHandle")
 	// Get the versioned database (state database) for a chain/ledger
 	vDB, err := provider.vdbProvider.GetDBHandle(ledgerID)
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("After provider.vdbProvider.GetDBHandle")
+
 	// Get the history database (index for history of values by key) for a chain/ledger
 	historyDB, err := provider.historydbProvider.GetDBHandle(ledgerID)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Debug("After provider.historydbProvider.GetDBHandle")
 	// Create a kvLedger for this chain/ledger, which encasulates the underlying data stores
 	// (id store, blockstore, state database, history database)
 	l, err := newKVLedger(
