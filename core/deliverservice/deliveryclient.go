@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"math"
 	"sync"
 	"time"
@@ -163,7 +164,9 @@ func (d *deliverServiceImpl) StartDeliverForChannel(chainID string, ledgerInfo b
 		client := d.newClient(chainID, ledgerInfo)
 		logger.Debug("This peer will pass blocks from orderer service to other peers for channel", chainID)
 		d.blockProviders[chainID] = ffprovider.NewBlocksProvider(chainID, client, d.conf.Gossip, d.conf.CryptoSvc)
-		go d.launchBlockProvider(chainID, finalizer)
+		if !config.IsStorage && !config.IsEndorser {
+			go d.launchBlockProvider(chainID, finalizer)
+		}
 	}
 	return nil
 }
