@@ -5,6 +5,7 @@ import (
 	"fmt"
 	ledger2 "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/fastfabric-extensions"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
 	"google.golang.org/grpc"
@@ -42,42 +43,76 @@ func (s *server) IteratorClose(ctx context.Context, itr *Iterator) (*Result, err
 }
 
 func (s *server) RetrieveBlocks(ctx context.Context, req *RetrieveBlocksRequest) (*Iterator, error) {
-	itr, err := s.peerledger[req.LedgerId].GetBlockstore().RetrieveBlocks(req.StartNum)
-	s.iterators = append(s.iterators, itr)
-	return &Iterator{IteratorId:int32(len(s.iterators) -1)}, err
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		itr, err := store.RetrieveBlocks(req.StartNum)
+		s.iterators = append(s.iterators, itr)
+		return &Iterator{IteratorId: int32(len(s.iterators) - 1)}, err
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) RetrieveTxValidationCodeByTxID(ctx context.Context, req *RetrieveTxValidationCodeByTxIDRequest) (*ValidationCode, error) {
-	code, err := s.peerledger[req.LedgerId].GetBlockstore().RetrieveTxValidationCodeByTxID(req.TxID)
-	return &ValidationCode{ValidationCode:int32(code)}, err
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		code, err := store.RetrieveTxValidationCodeByTxID(req.TxID)
+		return &ValidationCode{ValidationCode:int32(code)}, err
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) RetrieveBlockByTxID(ctx context.Context, req *RetrieveBlockByTxIDRequest) (*common.Block, error) {
-	return s.peerledger[req.LedgerId].GetBlockstore().RetrieveBlockByTxID(req.TxID)
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		store.RetrieveBlockByTxID(req.TxID)
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
+}
+
+func (s *server) GetBlockstore(ledgerId string) fastfabric_extensions.BlockStore {
+	if l, ok := s.peerledger[ledgerId]; ok {
+		return l.GetBlockstore()
+	}
+	return nil
 }
 
 func (s *server) RetrieveTxByBlockNumTranNum(ctx context.Context, req *RetrieveTxByBlockNumTranNumRequest) (*common.Envelope, error) {
-	return s.peerledger[req.LedgerId].GetBlockstore().RetrieveTxByBlockNumTranNum(req.BlockNo, req.TxNo)
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		return store.RetrieveTxByBlockNumTranNum(req.BlockNo, req.TxNo)
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) RetrieveTxByID(ctx context.Context, req *RetrieveTxByIDRequest) (*common.Envelope, error) {
-	return s.peerledger[req.LedgerId].GetBlockstore().RetrieveTxByID(req.TxID)
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		return store.RetrieveTxByID(req.TxID)
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) RetrieveBlockByNumber(ctx context.Context, req *RetrieveBlockByNumberRequest) (*common.Block, error) {
-	return s.peerledger[req.LedgerId].GetBlockstore().RetrieveBlockByNumber(req.BlockNo)
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		return store.RetrieveBlockByNumber(req.BlockNo)
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) GetBlockchainInfo(ctx context.Context, req *GetBlockchainInfoRequest) (*common.BlockchainInfo, error) {
-	return s.peerledger[req.LedgerId].GetBlockstore().GetBlockchainInfo()
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		return store.GetBlockchainInfo()
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) RetrieveBlockByHash(ctx context.Context, req *RetrieveBlockByHashRequest) (*common.Block, error) {
-	return s.peerledger[req.LedgerId].GetBlockstore().RetrieveBlockByHash(req.BlockHash)
+	if store:= s.GetBlockstore(req.LedgerId); store != nil {
+		return store.RetrieveBlockByHash(req.BlockHash)
+	}
+	return nil, fmt.Errorf("store not initialized yet.")
 }
 
 func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error) {
 	l := s.peerledger[req.LedgerId]
+	if l == nil {
+		return nil, fmt.Errorf("store not initialized yet.")
+	}
 	if err := l.CommitWithPvtData(&ledger.BlockAndPvtData{Block: cached.GetBlock(req.Block)}); err != nil{
 		return nil, err
 	}
