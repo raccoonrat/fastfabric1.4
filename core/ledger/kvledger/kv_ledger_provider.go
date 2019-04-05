@@ -152,18 +152,20 @@ func (provider *Provider) openInternal(ledgerID string) (ledger.PeerLedger, erro
 	}
 	provider.collElgNotifier.registerListener(ledgerID, blockStore)
 
+	logger.Debug("Before provider.vdbProvider.GetDBHandle")
 	// Get the versioned database (state database) for a chain/ledger
 	vDB, err := provider.vdbProvider.GetDBHandle(ledgerID)
 	if err != nil {
 		return nil, err
 	}
-
+	logger.Debug("After provider.vdbProvider.GetDBHandle")
 	// Get the history database (index for history of values by key) for a chain/ledger
 	historyDB, err := provider.historydbProvider.GetDBHandle(ledgerID)
 	if err != nil {
 		return nil, err
 	}
 
+	logger.Debug("After provider.historydbProvider.GetDBHandle")
 	// Create a kvLedger for this chain/ledger, which encasulates the underlying data stores
 	// (id store, blockstore, state database, history database)
 	l, err := newKVLedger(
