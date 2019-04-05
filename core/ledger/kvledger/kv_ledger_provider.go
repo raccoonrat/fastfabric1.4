@@ -20,6 +20,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"github.com/hyperledger/fabric/protos/common"
@@ -128,7 +129,9 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger,
 		lgr.Close()
 		return nil, err
 	}
-	remote.GetStoragePeerClient().CreateLedger(context.Background(),&remote.StorageRequest{LedgerId:ledgerID, Block:genesisBlock} )
+	if !config.IsStorage && !config.IsEndorser {
+		remote.GetStoragePeerClient().CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
+	}
 	panicOnErr(provider.idStore.createLedgerID(ledgerID, genesisBlock), "Error while marking ledger as created")
 	return lgr, nil
 }
