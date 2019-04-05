@@ -98,7 +98,10 @@ func (s *server) GetBlockchainInfo(ctx context.Context, req *GetBlockchainInfoRe
 	if store:= s.GetBlockstore(req.LedgerId); store != nil {
 		return store.GetBlockchainInfo()
 	}
-	return nil, fmt.Errorf("store not initialized yet.")
+	return &common.BlockchainInfo{
+		Height:            0,
+		CurrentBlockHash:  nil,
+		PreviousBlockHash: nil}, nil
 }
 
 func (s *server) RetrieveBlockByHash(ctx context.Context, req *RetrieveBlockByHashRequest) (*common.Block, error) {
