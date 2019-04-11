@@ -305,31 +305,30 @@ func serve(args []string) error {
 
 	validationPluginsByName := reg.Lookup(library.Validation).(map[string]validation.PluginFactory)
 	//if ffconfig.IsEndorser {
-		authFilters := reg.Lookup(library.Auth).([]authHandler.Filter)
-		endorserSupport := &endorser.SupportImpl{
-			SignerSupport:    signingIdentity,
-			Peer:             peer.Default,
-			PeerSupport:      peer.DefaultSupport,
-			ChaincodeSupport: chaincodeSupport,
-			SysCCProvider:    sccp,
-			ACLProvider:      aclProvider,
-		}
-		endorsementPluginsByName := reg.Lookup(library.Endorsement).(map[string]endorsement2.PluginFactory)
-		signingIdentityFetcher := (endorsement3.SigningIdentityFetcher)(endorserSupport)
-		channelStateRetriever := endorser.ChannelStateRetriever(endorserSupport)
-		pluginMapper := endorser.MapBasedPluginMapper(endorsementPluginsByName)
-		pluginEndorser := endorser.NewPluginEndorser(&endorser.PluginSupport{
-			ChannelStateRetriever:   channelStateRetriever,
-			TransientStoreRetriever: peer.TransientStoreFactory,
-			PluginMapper:            pluginMapper,
-			SigningIdentityFetcher:  signingIdentityFetcher,
-		})
-		endorserSupport.PluginEndorser = pluginEndorser
-
-		serverEndorser := endorser.NewEndorserServer(privDataDist, endorserSupport, pr, metricsProvider)
-		auth := authHandler.ChainFilters(serverEndorser, authFilters...)
-		// Register the Endorser server
-		pb.RegisterEndorserServer(peerServer.Server(), auth)
+	authFilters := reg.Lookup(library.Auth).([]authHandler.Filter)
+	endorserSupport := &endorser.SupportImpl{
+		SignerSupport:    signingIdentity,
+		Peer:             peer.Default,
+		PeerSupport:      peer.DefaultSupport,
+		ChaincodeSupport: chaincodeSupport,
+		SysCCProvider:    sccp,
+		ACLProvider:      aclProvider,
+	}
+	endorsementPluginsByName := reg.Lookup(library.Endorsement).(map[string]endorsement2.PluginFactory)
+	signingIdentityFetcher := (endorsement3.SigningIdentityFetcher)(endorserSupport)
+	channelStateRetriever := endorser.ChannelStateRetriever(endorserSupport)
+	pluginMapper := endorser.MapBasedPluginMapper(endorsementPluginsByName)
+	pluginEndorser := endorser.NewPluginEndorser(&endorser.PluginSupport{
+		ChannelStateRetriever:   channelStateRetriever,
+		TransientStoreRetriever: peer.TransientStoreFactory,
+		PluginMapper:            pluginMapper,
+		SigningIdentityFetcher:  signingIdentityFetcher,
+	})
+	endorserSupport.PluginEndorser = pluginEndorser
+	serverEndorser := endorser.NewEndorserServer(privDataDist, endorserSupport, pr, metricsProvider)
+	auth := authHandler.ChainFilters(serverEndorser, authFilters...)
+	// Register the Endorser server
+	pb.RegisterEndorserServer(peerServer.Server(), auth)
 
 	//}
 

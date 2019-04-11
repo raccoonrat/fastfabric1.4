@@ -145,9 +145,7 @@ func (b *blocksProviderImpl) receive(messages chan *orderer.DeliverResponse) {
 }
 
 func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise chan *cached.Block) {
-	done := make(chan *cached.Block)
-	b.verify(block, done)
-
+	done := b.verify(block)
 	success := false
 	//if done is closed without successful verification, then the loop will not be executed
 	for verifiedBlock := range done{
@@ -161,15 +159,17 @@ func (b *blocksProviderImpl) processBlock(block *common.Block, commitPromise cha
 	}
 }
 
-func (b *blocksProviderImpl) verify(block *common.Block, done chan *cached.Block){
+func (b *blocksProviderImpl) verify(block *common.Block) (chan *cached.Block){
+	done := make(chan *cached.Block,1)
 	defer close(done)
 	cblock := cached.GetBlock(block)
 	if err := b.mcs.VerifyBlock(gossipcommon.ChainID(b.chainID),cblock.Header.Number, cblock); err != nil {
 		logger.Errorf("[%s] Error verifying block with sequnce number %d, due to %s", b.chainID, cblock.Header.Number, err)
-		return
+		return done
 	}
 
 	done <- cblock
+	return done
 }
 
 func (b *blocksProviderImpl) gossipBlock(block *common.Block) {

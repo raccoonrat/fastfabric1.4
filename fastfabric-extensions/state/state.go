@@ -93,18 +93,19 @@ func (s *GossipStateProviderImpl) commit() {
 	}
 }
 func (s *GossipStateProviderImpl) store() {
-	<- s.buffer.Ready()
-	block := s.buffer.Pop()
-	// Commit block with available private transactions
-	if err := s.ledgerResources.StoreBlock(block, util.PvtDataCollections{}); err != nil {
-		logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
-		return
-	}
+	for range s.buffer.Ready() {
+		block := s.buffer.Pop()
+		// Commit block with available private transactions
+		if err := s.ledgerResources.StoreBlock(block, util.PvtDataCollections{}); err != nil {
+			logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
+			return
+		}
 
-	// Update ledger height
-	s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
-	logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
-		s.chainID, block.Header.Number, len(block.Data.Data))
+		// Update ledger height
+		s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
+		logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
+			s.chainID, block.Header.Number, len(block.Data.Data))
+	}
 }
 
 func (s *GossipStateProviderImpl) validate(pipeline *parallel.Pipeline) {
