@@ -244,8 +244,7 @@ func (h *Handler) deliverBlocks(ctx context.Context, srv *Server, envelope *cb.E
 
 	if err := accessControl.Evaluate(); err != nil {
 		logger.Warningf("[channel: %s] Client authorization revoked for deliver request from %s: %s", chdr.ChannelId, addr, err)
-		logger.Warningf("This check has been temporarily disabled")
-		//return cb.Status_FORBIDDEN, nil
+		return cb.Status_FORBIDDEN, nil
 	}
 
 	seekInfo := &ab.SeekInfo{}
