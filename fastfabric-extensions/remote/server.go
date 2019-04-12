@@ -67,7 +67,7 @@ func (s *server) RetrieveTxValidationCodeByTxID(ctx context.Context, req *Retrie
 func (s *server) RetrieveBlockByTxID(ctx context.Context, req *RetrieveBlockByTxIDRequest) (*common.Block, error) {
 	fmt.Println("Call to RetrieveBlockByTxID")
 	if store:= s.getBlockstore(req.LedgerId); store != nil {
-		store.RetrieveBlockByTxID(req.TxID)
+		return store.RetrieveBlockByTxID(req.TxID)
 	}
 	return nil, fmt.Errorf("store not initialized yet.")
 }
