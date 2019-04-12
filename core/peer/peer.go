@@ -385,9 +385,9 @@ func createChain(cid string, ledger ledger.PeerLedger, cb *common.Block, ccp ccp
 	}{cs, validationWorkersSemaphore}
 	validator := txvalidator.NewTxValidator(cid, vcs, sccp, pm)
 	c := committer.NewLedgerCommitterReactive(ledger, func(block *cached.Block) error {
-		chainID, _ := block.GetChannelId()
-		if chainID != "" {
-			return fmt.Errorf("No channel id found.")
+		chainID, err := block.GetChannelId()
+		if err != nil {
+			return err
 		}
 		return SetCurrConfigBlock(block.Block, chainID)
 	})
