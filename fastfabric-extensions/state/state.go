@@ -1,10 +1,12 @@
 package state
 
 import (
+	"context"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/gossip/state"
 	"github.com/hyperledger/fabric/gossip/util"
+	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/transientstore"
 	common2 "github.com/hyperledger/fabric/gossip/common"
@@ -42,6 +44,7 @@ type GossipStateProviderImpl struct {
 
 	mediator *state.ServicesMediator
 	ledgerResources
+ 	client remote.StoragePeerClient
 }
 
 func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources) state.GossipStateProvider {
@@ -64,7 +67,8 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 		chainID: chainID,
 		mediator: services,
 		ledgerResources: ledger,
-		buffer:NewPayloadsBuffer(height)}
+		buffer:NewPayloadsBuffer(height),
+		client:remote.GetStoragePeerClient()}
 	go gsp.deliverPayloads()
 	return gsp
 }
@@ -100,6 +104,8 @@ func (s *GossipStateProviderImpl) store() {
 			logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
 			return
 		}
+
+		go s.client.Store(context.Background(), &remote.StorageRequest{Block:block.Block})
 
 		// Update ledger height
 		s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
