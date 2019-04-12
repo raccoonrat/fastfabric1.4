@@ -3,6 +3,7 @@ package fsblkstorage
 import (
 	"context"
 	"github.com/hyperledger/fabric/common/ledger"
+	coreLedger "github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
@@ -61,9 +62,13 @@ func (b BlockStoreImpl) RetrieveBlockByNumber(blockNum uint64) (*common.Block, e
 }
 
 func (b BlockStoreImpl) RetrieveTxByID(txID string) (*common.Envelope, error) {
-	return b.client.RetrieveTxByID(context.Background(), &remote.RetrieveTxByIDRequest{
+	block, err := b.client.RetrieveTxByID(context.Background(), &remote.RetrieveTxByIDRequest{
 		LedgerId:b.ledgerId,
 		TxID:txID})
+	if err.Error() == "rpc error: code = Unknown desc = Entry not found in index" {
+		return block, coreLedger.NotFoundInIndexErr("")
+	}
+	return block, err
 }
 
 func (b BlockStoreImpl) RetrieveTxByBlockNumTranNum(blockNum uint64, tranNum uint64) (*common.Envelope, error) {
