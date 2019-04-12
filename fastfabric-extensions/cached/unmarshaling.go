@@ -283,8 +283,8 @@ func (pl *Payload) UnmarshalTransaction() (*Transaction, error) {
 	}
 
 	tx := &Transaction{Transaction: txRaw, Actions: make([]*TransactionAction, len(txRaw.Actions))}
-	for i, a := range tx.Actions{
-		tx.Actions[i] = a
+	for i, a := range txRaw.Actions{
+		tx.Actions[i] = &TransactionAction{TransactionAction:a}
 	}
 	pl.cachedEnTx = tx
 	return tx, nil
