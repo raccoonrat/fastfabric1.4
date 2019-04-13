@@ -3,8 +3,10 @@ package state
 import (
 	"context"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
+	"github.com/hyperledger/fabric/fastfabric-extensions/stopwatch"
 	"github.com/hyperledger/fabric/gossip/state"
 	"github.com/hyperledger/fabric/gossip/util"
 	"github.com/hyperledger/fabric/protos/common"
@@ -111,6 +113,9 @@ func (s *GossipStateProviderImpl) store() {
 		s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
 		logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
 			s.chainID, block.Header.Number, len(block.Data.Data))
+		if config.IsBenchmark {
+			stopwatch.Now("commit_benchmark")
+		}
 	}
 }
 

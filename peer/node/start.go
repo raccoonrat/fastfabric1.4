@@ -10,6 +10,7 @@ import (
 	"fmt"
 	ffconfig "github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
+	"github.com/hyperledger/fabric/fastfabric-extensions/stopwatch"
 	"net"
 	"net/http"
 	"os"
@@ -102,6 +103,8 @@ const (
 var chaincodeDevMode bool
 
 func startCmd() *cobra.Command {
+
+	var benchmarkOutput string
 	// Set the flags on the node start command.
 	flags := nodeStartCmd.Flags()
 	flags.BoolVarP(&chaincodeDevMode, "peer-chaincodedev", "", false,
@@ -111,6 +114,16 @@ func startCmd() *cobra.Command {
 	flags.StringSliceVar(&ffconfig.EndorserAddresses,"endorserAddr", []string{"localhost:10000"}, "Defines the addresses of the decoupled endorser servers")
 	flags.StringVar(&ffconfig.StorageAddress,"storageAddr", "localhost:10000", "Defines where the address of the decoupled persistent ledger stored")
 	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
+	flags.BoolVarP(&ffconfig.IsBenchmark, "benchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
+	flags.StringVarP(&benchmarkOutput, "output", "o", "~/benchmark.log", "Specifies the benchmark out put location." )
+
+	if ffconfig.IsBenchmark{
+		f, err := os.OpenFile(benchmarkOutput, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+		if err != nil {
+			panic(err)
+		}
+		stopwatch.SetOutput("commit_benchmark",f)
+	}
 
 	return nodeStartCmd
 }
