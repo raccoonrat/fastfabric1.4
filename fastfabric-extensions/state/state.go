@@ -74,7 +74,8 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 		mediator: services,
 		ledgerResources: ledger,
 		buffer:NewPayloadsBuffer(height),
-		client:remote.GetStoragePeerClient()}
+		client:remote.GetStoragePeerClient(),
+		once:sync.Once{}}
 	gsp.done.Add(1)
 
 	go gsp.deliverPayloads()
