@@ -75,6 +75,7 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 		ledgerResources: ledger,
 		buffer:NewPayloadsBuffer(height),
 		client:remote.GetStoragePeerClient(),
+		stopCh: make(chan struct{}, 1),
 		once:sync.Once{}}
 	gsp.done.Add(1)
 
@@ -150,6 +151,7 @@ func (s *GossipStateProviderImpl) Stop() {
 
 	logger.Warning("stopping modified GossipStateProvider")
 	stopwatch.Flush()
+	logger.Warning("done Flushing")
 	s.once.Do(func() {
 		s.stopCh <- struct{}{}
 		logger.Warning("sent stop")
