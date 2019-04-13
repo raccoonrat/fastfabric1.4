@@ -146,7 +146,7 @@ func (s *GossipStateProviderImpl) Stop() {
 	// Make sure stop won't be executed twice
 	// and stop channel won't be used again
 
-	logger.Warning("stopping GossipStateProvider")
+	logger.Warning("stopping modified GossipStateProvider")
 	stopwatch.Flush()
 	s.once.Do(func() {
 		s.stopCh <- struct{}{}
@@ -154,6 +154,7 @@ func (s *GossipStateProviderImpl) Stop() {
 		s.done.Wait()
 
 	})
+	logger.Warning("stopped modified GossipStateProvider")
 	s.GossipStateProvider.Stop()
 	logger.Warning("stopped GossipStateProvider")
 }
