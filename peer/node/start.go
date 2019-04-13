@@ -117,13 +117,13 @@ func startCmd() *cobra.Command {
 	flags.BoolVarP(&ffconfig.IsBenchmark, "benchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
 	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location." )
 
-	logger.Info("benchmark output is set to", benchmarkOutput)
 	if ffconfig.IsBenchmark{
 		f, err := os.OpenFile(benchmarkOutput, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			panic(err)
 		}
 		stopwatch.SetOutput("commit_benchmark",f)
+		logger.Info("benchmark output is set to", f)
 	}
 
 	return nodeStartCmd
