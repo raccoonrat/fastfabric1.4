@@ -143,7 +143,7 @@ func serve(args []string) error {
 			panic(err)
 		}
 		stopwatch.SetOutput("commit_benchmark",f)
-		logger.Info("benchmark output is set to", f)
+		logger.Info("Running in benchmarking mode")
 	}
 
 	if !ffconfig.IsStorage {
