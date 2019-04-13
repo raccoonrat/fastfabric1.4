@@ -115,7 +115,7 @@ func startCmd() *cobra.Command {
 	flags.StringVar(&ffconfig.StorageAddress,"storageAddr", "localhost:10000", "Defines where the address of the decoupled persistent ledger stored")
 	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
 	flags.BoolVarP(&ffconfig.IsBenchmark, "benchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
-	flags.StringVarP(&benchmarkOutput, "output", "o", "~/benchmark.log", "Specifies the benchmark out put location." )
+	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location." )
 
 	logger.Info("benchmark output is set to", benchmarkOutput)
 	if ffconfig.IsBenchmark{
