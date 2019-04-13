@@ -130,7 +130,6 @@ func (s *GossipStateProviderImpl) store() {
 		case <-s.stopCh:
 			s.stopCh <- struct{}{}
 			logger.Debug("State provider has been stopped, finishing to push new blocks.")
-			logger.Warning("stopping storing")
 			return
 		}
 	}
