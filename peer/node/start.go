@@ -152,6 +152,8 @@ func serve(args []string) error {
 			}
 		}
 		remote.StartStoragePeerClient(ffconfig.StorageAddress)
+	}else{
+		logger.Info("Running as persistent peer")
 	}
 
 	// currently the peer only works with the standard MSP
