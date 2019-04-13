@@ -114,7 +114,7 @@ func startCmd() *cobra.Command {
 	flags.StringSliceVar(&ffconfig.EndorserAddresses,"endorserAddr", []string{"localhost:10000"}, "Defines the addresses of the decoupled endorser servers")
 	flags.StringVar(&ffconfig.StorageAddress,"storageAddr", "localhost:10000", "Defines where the address of the decoupled persistent ledger stored")
 	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
-	flags.BoolVarP(&ffconfig.IsBenchmark, "benchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
+	flags.BoolVarP(&ffconfig.IsBenchmark, "isBenchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
 	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location." )
 
 	fmt.Println(ffconfig.IsBenchmark)
@@ -145,6 +145,7 @@ var nodeStartCmd = &cobra.Command{
 }
 
 func serve(args []string) error {
+	fmt.Println(ffconfig.IsBenchmark)
 	if !ffconfig.IsStorage {
 		if !ffconfig.IsEndorser {
 			for _, address := range ffconfig.EndorserAddresses {
