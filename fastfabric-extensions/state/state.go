@@ -145,6 +145,9 @@ func (s *GossipStateProviderImpl) validate(pipeline *parallel.Pipeline) {
 func (s *GossipStateProviderImpl) Stop() {
 	// Make sure stop won't be executed twice
 	// and stop channel won't be used again
+
+	logger.Warning("stopping GossipStateProvider")
+	stopwatch.Flush()
 	s.once.Do(func() {
 		s.stopCh <- struct{}{}
 		// Make sure all go-routines has finished
@@ -152,5 +155,6 @@ func (s *GossipStateProviderImpl) Stop() {
 
 	})
 	s.GossipStateProvider.Stop()
+	logger.Warning("stopped GossipStateProvider")
 }
 
