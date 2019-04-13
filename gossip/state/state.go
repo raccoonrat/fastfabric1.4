@@ -233,7 +233,7 @@ func NewGossipStateProvider(chainID string, services *ServicesMediator, ledger l
 	logger.Debug("Updating gossip ledger height to", height)
 	services.UpdateLedgerHeight(height, common2.ChainID(s.chainID))
 
-	s.done.Add(4)
+	s.done.Add(3)
 
 	// Listen for incoming communication
 	go s.listen()
