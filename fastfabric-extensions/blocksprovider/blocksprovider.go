@@ -83,6 +83,7 @@ func (b *blocksProviderImpl) DeliverBlocks() {
 	statusCounter := 0
 	defer b.client.Close()
 	defer close(parallel.ReadyForValidation)
+	defer close(parallel.ReadyToCommit)
 
 	messages := make(chan *orderer.DeliverResponse, config.BlockPipelineWidth)
 	go b.receive(messages)

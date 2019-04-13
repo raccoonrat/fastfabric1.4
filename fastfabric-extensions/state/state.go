@@ -13,6 +13,7 @@ import (
 	"github.com/hyperledger/fabric/protos/transientstore"
 	common2 "github.com/hyperledger/fabric/gossip/common"
 	"github.com/pkg/errors"
+	"sync"
 )
 var logger = util.GetLogger(util.ServiceLogger, "")
 
@@ -47,6 +48,9 @@ type GossipStateProviderImpl struct {
 	mediator *state.ServicesMediator
 	ledgerResources
  	client remote.StoragePeerClient
+	done sync.WaitGroup
+	once sync.Once
+	stopCh chan struct{}
 }
 
 func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources) state.GossipStateProvider {
@@ -71,6 +75,8 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 		ledgerResources: ledger,
 		buffer:NewPayloadsBuffer(height),
 		client:remote.GetStoragePeerClient()}
+	gsp.done.Add(1)
+
 	go gsp.deliverPayloads()
 	return gsp
 }
@@ -99,22 +105,30 @@ func (s *GossipStateProviderImpl) commit() {
 	}
 }
 func (s *GossipStateProviderImpl) store() {
-	for range s.buffer.Ready() {
-		block := s.buffer.Pop()
-		// Commit block with available private transactions
-		if err := s.ledgerResources.StoreBlock(block, util.PvtDataCollections{}); err != nil {
-			logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
+	defer s.done.Done()
+	for {
+		select {
+		case <-s.buffer.Ready():
+			block := s.buffer.Pop()
+			// Commit block with available private transactions
+			if err := s.ledgerResources.StoreBlock(block, util.PvtDataCollections{}); err != nil {
+				logger.Errorf("Got error while committing(%+v)", errors.WithStack(err))
+				return
+			}
+
+			go s.client.Store(context.Background(), &remote.StorageRequest{Block:block.Block})
+
+			// Update ledger height
+			s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
+			logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
+				s.chainID, block.Header.Number, len(block.Data.Data))
+			if config.IsBenchmark {
+				stopwatch.Now("commit_benchmark")
+			}
+		case <-s.stopCh:
+			s.stopCh <- struct{}{}
+			logger.Debug("State provider has been stopped, finishing to push new blocks.")
 			return
-		}
-
-		go s.client.Store(context.Background(), &remote.StorageRequest{Block:block.Block})
-
-		// Update ledger height
-		s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))
-		logger.Debugf("[%s] Committed block [%d] with %d transaction(s)",
-			s.chainID, block.Header.Number, len(block.Data.Data))
-		if config.IsBenchmark {
-			stopwatch.Now("commit_benchmark")
 		}
 	}
 }
@@ -126,5 +140,17 @@ func (s *GossipStateProviderImpl) validate(pipeline *parallel.Pipeline) {
 		return
 	}
 	pipeline.Channel <- pipeline.Block
+}
+
+func (s *GossipStateProviderImpl) Stop() {
+	// Make sure stop won't be executed twice
+	// and stop channel won't be used again
+	s.once.Do(func() {
+		s.stopCh <- struct{}{}
+		// Make sure all go-routines has finished
+		s.done.Wait()
+
+	})
+	s.GossipStateProvider.Stop()
 }
 
