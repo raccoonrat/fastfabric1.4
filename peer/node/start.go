@@ -7,7 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 package node
 
 import (
-	"flag"
 	"fmt"
 	ffconfig "github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
@@ -121,7 +120,7 @@ func startCmd() *cobra.Command {
 	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
 	flags.BoolVarP(&ffconfig.IsBenchmark, "isBenchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
 	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location." )
-	flag.StringVar(&cpuprofile,"cpuprofile", "", "write cpu profile to file")
+	flags.StringVar(&cpuprofile,"cpuprofile", "", "write cpu profile to file")
 
 	return nodeStartCmd
 }
