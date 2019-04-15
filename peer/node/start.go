@@ -7,14 +7,17 @@ SPDX-License-Identifier: Apache-2.0
 package node
 
 import (
+	"flag"
 	"fmt"
 	ffconfig "github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/fastfabric-extensions/stopwatch"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"syscall"
 	"time"
 
@@ -102,6 +105,7 @@ const (
 
 var chaincodeDevMode bool
 var benchmarkOutput string
+var cpuprofile string
 
 func startCmd() *cobra.Command {
 
@@ -117,6 +121,7 @@ func startCmd() *cobra.Command {
 	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "localhost:10000", "The address this peer listens to for validated blocks" )
 	flags.BoolVarP(&ffconfig.IsBenchmark, "isBenchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
 	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location." )
+	flag.StringVar(&cpuprofile,"cpuprofile", "", "write cpu profile to file")
 
 	return nodeStartCmd
 }
@@ -155,6 +160,15 @@ func serve(args []string) error {
 		remote.StartStoragePeerClient(ffconfig.StorageAddress)
 	}else{
 		logger.Info("Running as persistent peer")
+	}
+
+	if cpuprofile != "" {
+		f, err := os.Create(cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
 	}
 
 	// currently the peer only works with the standard MSP
