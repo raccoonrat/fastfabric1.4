@@ -4,23 +4,29 @@ import (
 	"context"
 	"github.com/hyperledger/fabric/common/ledger"
 	coreLedger "github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 )
 
 func newFsBlockStore(ledgerId string) *BlockStoreImpl {
-	return &BlockStoreImpl{ledgerId : ledgerId, client: remote.GetStoragePeerClient()}
+	return &BlockStoreImpl{ledgerId : ledgerId, client: remote.GetStoragePeerClient(), txCache: make(map[string]bool)}
 }
-
-
 
 type BlockStoreImpl struct {
 	client   remote.StoragePeerClient
 	ledgerId string
+	txCache map[string]bool
 }
 
-func (BlockStoreImpl) AddBlock(block *common.Block) error {
+func (b BlockStoreImpl) AddBlock(block *cached.Block) error {
+	envs, _ := block.UnmarshalAllEnvelopes()
+	for _,env := range envs{
+		pl, _ := env.UnmarshalPayload()
+		chdr, _ := pl.Header.UnmarshalChannelHeader()
+		b.txCache[chdr.TxId] = true
+	}
 	return nil
 }
 
@@ -62,13 +68,16 @@ func (b BlockStoreImpl) RetrieveBlockByNumber(blockNum uint64) (*common.Block, e
 }
 
 func (b BlockStoreImpl) RetrieveTxByID(txID string) (*common.Envelope, error) {
-	block, err := b.client.RetrieveTxByID(context.Background(), &remote.RetrieveTxByIDRequest{
+	if _, ok := b.txCache[txID];!ok{
+		return nil, coreLedger.NotFoundInIndexErr("")
+	}
+	tx, err := b.client.RetrieveTxByID(context.Background(), &remote.RetrieveTxByIDRequest{
 		LedgerId:b.ledgerId,
 		TxID:txID})
 	if err.Error() == "rpc error: code = Unknown desc = Entry not found in index" {
-		return block, coreLedger.NotFoundInIndexErr("")
+		return tx, coreLedger.NotFoundInIndexErr("")
 	}
-	return block, err
+	return tx, err
 }
 
 func (b BlockStoreImpl) RetrieveTxByBlockNumTranNum(blockNum uint64, tranNum uint64) (*common.Envelope, error) {

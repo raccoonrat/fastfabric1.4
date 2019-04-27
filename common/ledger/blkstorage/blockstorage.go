@@ -9,6 +9,7 @@ package blkstorage
 import (
 	"github.com/hyperledger/fabric/common/ledger"
 	l "github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/pkg/errors"
@@ -53,7 +54,7 @@ type BlockStoreProvider interface {
 // An implementation of this interface is expected to take an argument
 // of type `IndexConfig` which configures the block store on what items should be indexed
 type BlockStore interface {
-	AddBlock(block *common.Block) error
+	AddBlock(block *cached.Block) error
 	GetBlockchainInfo() (*common.BlockchainInfo, error)
 	RetrieveBlocks(startNum uint64) (ledger.ResultsIterator, error)
 	RetrieveBlockByHash(blockHash []byte) (*common.Block, error)

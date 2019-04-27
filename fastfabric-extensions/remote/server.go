@@ -35,6 +35,9 @@ type server struct {
 func (s *server) IteratorNext(ctx context.Context, itr  *Iterator) (*common.Block, error) {
 	fmt.Println("Call to IteratorNext")
 	res, err := s.iterators[itr.IteratorId].Next()
+	if res == nil {
+		return nil, err
+	}
 	return res.(*common.Block), err
 }
 

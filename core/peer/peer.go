@@ -747,7 +747,7 @@ type fileLedgerBlockStore struct {
 	ledger.PeerLedger
 }
 
-func (flbs fileLedgerBlockStore) AddBlock(*common.Block) error {
+func (flbs fileLedgerBlockStore) AddBlock(*cached.Block) error {
 	return nil
 }
 

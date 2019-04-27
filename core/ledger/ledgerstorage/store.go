@@ -137,7 +137,7 @@ func (s *Store) CommitWithPvtData(blockAndPvtdata *ledger.BlockAndPvtData) error
 		logger.Debugf("Skipping writing block [%d] to pvt block store as the store height is [%d]", blockNum, pvtBlkStoreHt)
 	}
 
-	if err := s.AddBlock(blockAndPvtdata.Block.Block); err != nil {
+	if err := s.AddBlock(blockAndPvtdata.Block); err != nil {
 		s.pvtdataStore.Rollback()
 		return err
 	}
