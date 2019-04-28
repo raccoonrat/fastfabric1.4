@@ -100,6 +100,7 @@ func (s *GossipStateProviderImpl) commit() {
 	for blockPromise := range parallel.ReadyToCommit{
 		block, _ := <- blockPromise
 		if block!= nil{
+			logger.Infof("Pushing block [%v] for commit",block.Header.Number)
 			s.buffer.Push(block)
 		}
 	}
