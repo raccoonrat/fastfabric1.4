@@ -12,7 +12,7 @@ import (
 )
 
 func newFsBlockStore(ledgerId string) *BlockStoreImpl {
-	return &BlockStoreImpl{ledgerId : ledgerId, client: remote.GetStoragePeerClient(), txCache: make(map[string]bool)}
+	return &BlockStoreImpl{ledgerId : ledgerId, client: remote.GetStoragePeerClient(), txCache: make(map[string]bool), lock:sync.RWMutex{}}
 }
 
 type BlockStoreImpl struct {
@@ -75,8 +75,8 @@ func (b BlockStoreImpl) RetrieveBlockByNumber(blockNum uint64) (*common.Block, e
 func (b BlockStoreImpl) checkCache(txID string) bool{
 	b.lock.RLock()
 	defer b.lock.RUnlock()
-	 _, ok := b.txCache[txID]
-	 return ok
+	_, ok := b.txCache[txID]
+	return ok
 }
 func (b BlockStoreImpl) RetrieveTxByID(txID string) (*common.Envelope, error) {
 	if ok := b.checkCache(txID);!ok{
