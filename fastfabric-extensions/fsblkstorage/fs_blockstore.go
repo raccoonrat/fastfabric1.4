@@ -8,6 +8,7 @@ import (
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
+	"sync"
 )
 
 func newFsBlockStore(ledgerId string) *BlockStoreImpl {
@@ -18,10 +19,14 @@ type BlockStoreImpl struct {
 	client   remote.StoragePeerClient
 	ledgerId string
 	txCache map[string]bool
+	items map[string][]byte
+	lock  sync.RWMutex
 }
 
 func (b BlockStoreImpl) AddBlock(block *cached.Block) error {
 	envs, _ := block.UnmarshalAllEnvelopes()
+	b.lock.Lock()
+	defer b.lock.Unlock()
 	for _,env := range envs{
 		pl, _ := env.UnmarshalPayload()
 		chdr, _ := pl.Header.UnmarshalChannelHeader()
@@ -67,8 +72,14 @@ func (b BlockStoreImpl) RetrieveBlockByNumber(blockNum uint64) (*common.Block, e
 		BlockNo:blockNum})
 }
 
+func (b BlockStoreImpl) checkCache(txID string) bool{
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	 _, ok := b.txCache[txID]
+	 return ok
+}
 func (b BlockStoreImpl) RetrieveTxByID(txID string) (*common.Envelope, error) {
-	if _, ok := b.txCache[txID];!ok{
+	if ok := b.checkCache(txID);!ok{
 		return nil, coreLedger.NotFoundInIndexErr("")
 	}
 	tx, err := b.client.RetrieveTxByID(context.Background(), &remote.RetrieveTxByIDRequest{
