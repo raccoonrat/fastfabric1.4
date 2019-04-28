@@ -66,6 +66,9 @@ func NewPayloadsBuffer(next uint64) PayloadsBuffer {
 // next block has arrived and one could safely pop out
 // next sequence of blocks
 func (b *PayloadsBufferImpl) Ready() chan struct{} {
+	if b.buf[b.next] != nil && len(b.readyChan) == 0{
+		b.readyChan <- struct{}{}
+	}
 	return b.readyChan
 }
 
