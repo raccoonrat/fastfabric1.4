@@ -98,12 +98,10 @@ func (s *GossipStateProviderImpl) commit() {
 	go s.store()
 
 	for blockPromise := range parallel.ReadyToCommit{
-		block, more := <- blockPromise
-		if !more{
-			continue
+		block, _ := <- blockPromise
+		if block!= nil{
+			s.buffer.Push(block)
 		}
-
-		s.buffer.Push(block)
 	}
 }
 func (s *GossipStateProviderImpl) store() {
