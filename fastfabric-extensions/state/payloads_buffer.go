@@ -66,9 +66,6 @@ func NewPayloadsBuffer(next uint64) PayloadsBuffer {
 // next block has arrived and one could safely pop out
 // next sequence of blocks
 func (b *PayloadsBufferImpl) Ready() chan struct{} {
-	if b.buf[b.next] != nil && len(b.readyChan) == 0{
-		b.readyChan <- struct{}{}
-	}
 	return b.readyChan
 }
 
@@ -90,7 +87,7 @@ func (b *PayloadsBufferImpl) Push(block *cached.Block) {
 	b.buf[seqNum] = block
 
 	// Send notification that next sequence has arrived
-	if seqNum == b.next && len(b.readyChan) == 0 {
+	if b.buf[b.next] != nil && len(b.readyChan) == 0 {
 		b.readyChan <- struct{}{}
 	}
 }
