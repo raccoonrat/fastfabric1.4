@@ -76,6 +76,7 @@ func (b *PayloadsBufferImpl) Ready() chan struct{} {
 func (b *PayloadsBufferImpl) Push(block *cached.Block) {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	defer b.checkForReady()
 
 	seqNum := block.Header.Number
 
@@ -85,11 +86,6 @@ func (b *PayloadsBufferImpl) Push(block *cached.Block) {
 	}
 
 	b.buf[seqNum] = block
-
-	// Send notification that next sequence has arrived
-	if b.buf[b.next] != nil && len(b.readyChan) == 0 {
-		b.readyChan <- struct{}{}
-	}
 }
 
 // Next function provides the number of the next expected block
@@ -104,6 +100,7 @@ func (b *PayloadsBufferImpl) Pop() *cached.Block {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
 
+
 	result := b.buf[b.Next()]
 
 	if result != nil {
@@ -115,8 +112,14 @@ func (b *PayloadsBufferImpl) Pop() *cached.Block {
 		b.drainReadChannel()
 
 	}
-
 	return result
+}
+
+func  (b *PayloadsBufferImpl) checkForReady(){
+	// Send notification that next sequence has arrived
+	if b.buf[b.next] != nil && len(b.readyChan) == 0 {
+		b.readyChan <- struct{}{}
+	}
 }
 
 // drainReadChannel empties ready channel in case last
