@@ -23,7 +23,7 @@ func StartServer(address string) {
 	s := grpc.NewServer()
 	RegisterStoragePeerServer(s, storageServer)
 	go s.Serve(lis)
-	fmt.Println("Start listening for block s")
+	fmt.Println("Start listening for blocks")
 }
 
 type server struct {
