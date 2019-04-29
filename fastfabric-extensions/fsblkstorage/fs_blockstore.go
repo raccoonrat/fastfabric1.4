@@ -12,25 +12,21 @@ import (
 )
 
 func newFsBlockStore(ledgerId string) *BlockStoreImpl {
-	return &BlockStoreImpl{ledgerId : ledgerId, client: remote.GetStoragePeerClient(), txCache: make(map[string]bool), lock:sync.RWMutex{}}
+	return &BlockStoreImpl{ledgerId : ledgerId, client: remote.GetStoragePeerClient(), txCache: sync.Map{}}
 }
 
 type BlockStoreImpl struct {
 	client   remote.StoragePeerClient
 	ledgerId string
-	txCache map[string]bool
-	items map[string][]byte
-	lock  sync.RWMutex
+	txCache sync.Map
 }
 
 func (b BlockStoreImpl) AddBlock(block *cached.Block) error {
 	envs, _ := block.UnmarshalAllEnvelopes()
-	b.lock.Lock()
-	defer b.lock.Unlock()
 	for _,env := range envs{
 		pl, _ := env.UnmarshalPayload()
 		chdr, _ := pl.Header.UnmarshalChannelHeader()
-		b.txCache[chdr.TxId] = true
+		b.txCache.Store(chdr.TxId, true)
 	}
 	return nil
 }
@@ -73,9 +69,7 @@ func (b BlockStoreImpl) RetrieveBlockByNumber(blockNum uint64) (*common.Block, e
 }
 
 func (b BlockStoreImpl) checkCache(txID string) bool{
-	b.lock.RLock()
-	defer b.lock.RUnlock()
-	_, ok := b.txCache[txID]
+	_, ok := b.txCache.Load(txID)
 	return ok
 }
 func (b BlockStoreImpl) RetrieveTxByID(txID string) (*common.Envelope, error) {

@@ -145,6 +145,7 @@ func (c *coordinator) StorePvtData(txID string, privData *transientstore2.TxPvtR
 }
 
 func (c *coordinator) ValidateBlock(block *cached.Block) error{
+	logger.Debugf("[%s] Validating block [%d]", c.ChainID, block.Header.Number)
 	err := c.Validator.Validate(block)
 	if err != nil {
 		logger.Errorf("Validation failed: %+v", err)
@@ -163,8 +164,6 @@ func (c *coordinator) StoreBlock(block *cached.Block, privateDataSets util.PvtDa
 	}
 
 	logger.Infof("[%s] Received block [%d] from buffer", c.ChainID, block.Header.Number)
-
-	logger.Debugf("[%s] Validating block [%d]", c.ChainID, block.Header.Number)
 
 	blockAndPvtData := &ledger.BlockAndPvtData{
 		Block:          block,
