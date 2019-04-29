@@ -47,10 +47,11 @@ type GossipStateProviderImpl struct {
 
 	mediator *state.ServicesMediator
 	ledgerResources
- 	client remote.StoragePeerClient
-	done sync.WaitGroup
-	once sync.Once
-	stopCh chan struct{}
+ 	sClient remote.StoragePeerClient
+	eClients []remote.StoragePeerClient
+	done    sync.WaitGroup
+	once    sync.Once
+	stopCh  chan struct{}
 }
 
 func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources) state.GossipStateProvider {
@@ -70,13 +71,14 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 
 	gsp := &GossipStateProviderImpl{
 		GossipStateProvider: state.NewGossipStateProvider(chainID, services, ledger),
-		chainID: chainID,
-		mediator: services,
-		ledgerResources: ledger,
-		buffer:NewPayloadsBuffer(height),
-		client:remote.GetStoragePeerClient(),
-		stopCh: make(chan struct{}, 1),
-		once:sync.Once{}}
+		chainID:             chainID,
+		mediator:            services,
+		ledgerResources:     ledger,
+		buffer:              NewPayloadsBuffer(height),
+		sClient:             remote.GetStoragePeerClient(),
+		eClients:			 remote.GetEndorserPeerClients(),
+		stopCh:              make(chan struct{}, 1),
+		once:                sync.Once{}}
 	gsp.done.Add(1)
 
 	go gsp.deliverPayloads()
@@ -116,7 +118,12 @@ func (s *GossipStateProviderImpl) store() {
 				return
 			}
 
-			go s.client.Store(context.Background(), &remote.StorageRequest{Block:block.Block})
+			go func(){
+				s.sClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block})
+				for _,eClient := range s.eClients{
+					eClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block})
+				}
+			}()
 
 			// Update ledger height
 			s.mediator.UpdateLedgerHeight(block.Header.Number+1, common2.ChainID(s.chainID))

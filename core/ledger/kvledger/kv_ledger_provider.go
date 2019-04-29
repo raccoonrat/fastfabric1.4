@@ -131,6 +131,9 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger,
 	}
 	if !config.IsStorage && !config.IsEndorser {
 		remote.GetStoragePeerClient().CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
+		for _, eClient := range remote.GetEndorserPeerClients(){
+			eClient.CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
+		}
 	}
 	panicOnErr(provider.idStore.createLedgerID(ledgerID, genesisBlock), "Error while marking ledger as created")
 	return lgr, nil
