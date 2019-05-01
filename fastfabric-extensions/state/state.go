@@ -119,9 +119,10 @@ func (s *GossipStateProviderImpl) store() {
 			}
 
 			go func(){
-				s.sClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block})
+				chanId,_:= block.GetChannelId()
+				s.sClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId:chanId})
 				for _,eClient := range s.eClients{
-					eClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block})
+					eClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId:chanId})
 				}
 			}()
 
