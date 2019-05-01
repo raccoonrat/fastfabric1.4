@@ -129,7 +129,7 @@ func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error
 	fmt.Println("Call to Store")
 	l := s.peerledger[req.LedgerId]
 	if l == nil {
-		fmt.Println("ledger not initialized yet.")
+		fmt.Println("ledger not initialized yet:", req.LedgerId)
 		return nil, fmt.Errorf("store not initialized yet.")
 	}
 	block := cached.GetBlock(req.Block)
@@ -153,7 +153,7 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 		return nil, err
 	}
 
-	fmt.Println("Ledger constructed")
+	fmt.Println("Ledger constructed:", req.LedgerId)
 	return &Result{}, nil
 }
 
