@@ -81,7 +81,7 @@ func initialize(initializer *Initializer) {
 	})
 	ledgerProvider = provider
 	if config.IsStorage || config.IsEndorser{
-		remote.SetLedgerProvider(provider)
+		remote.SetCreateLedgerFunc(CreateLedger)
 		remote.StartServer(config.PeerAddress)
 	}
 

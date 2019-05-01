@@ -5,7 +5,6 @@ import (
 	"fmt"
 	ledger2 "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/fastfabric-extensions"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
@@ -29,8 +28,9 @@ func StartServer(address string) {
 
 type server struct {
 	ledgerProvider ledger.PeerLedgerProvider
-	peerledger map[string]ledger.PeerLedger
-	iterators []ledger2.ResultsIterator
+	peerledger     map[string]ledger.PeerLedger
+	iterators      []ledger2.ResultsIterator
+	createLedger   createFn
 }
 
 func (s *server) IteratorNext(ctx context.Context, itr  *Iterator) (*common.Block, error) {
@@ -149,7 +149,7 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 		return nil, fmt.Errorf("ledgerProvider must be set on this peer, is currently nil")
 	}
 
-	s.peerledger[req.LedgerId], err = ledgermgmt.CreateLedger(req.Block)
+	s.peerledger[req.LedgerId], err = s.createLedger(req.Block)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +158,8 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 	return &Result{}, nil
 }
 
-func SetLedgerProvider(provider ledger.PeerLedgerProvider){
-	storageServer.ledgerProvider = provider
+func SetCreateLedgerFunc(fn createFn){
+	storageServer.createLedger = fn
 }
 
+type createFn func(genesisBlock *common.Block) (ledger.PeerLedger, error)
