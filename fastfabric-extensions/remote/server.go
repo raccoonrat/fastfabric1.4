@@ -129,6 +129,7 @@ func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error
 	fmt.Println("Call to Store")
 	l := s.peerledger[req.LedgerId]
 	if l == nil {
+		fmt.Println("ledger not initialized yet.")
 		return nil, fmt.Errorf("store not initialized yet.")
 	}
 	block := cached.GetBlock(req.Block)
