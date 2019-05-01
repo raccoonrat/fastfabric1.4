@@ -5,6 +5,7 @@ import (
 	"fmt"
 	ledger2 "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/fastfabric-extensions"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"github.com/hyperledger/fabric/protos/common"
@@ -148,7 +149,7 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 		return nil, fmt.Errorf("ledgerProvider must be set on this peer, is currently nil")
 	}
 
-	s.peerledger[req.LedgerId], err = s.ledgerProvider.Create(req.Block)
+	s.peerledger[req.LedgerId], err = ledgermgmt.CreateLedger(req.Block)
 	if err != nil {
 		return nil, err
 	}
