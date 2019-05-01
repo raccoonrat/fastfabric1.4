@@ -131,7 +131,9 @@ func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error
 	if l == nil {
 		return nil, fmt.Errorf("store not initialized yet.")
 	}
-	if err := l.CommitWithPvtData(&ledger.BlockAndPvtData{Block: cached.GetBlock(req.Block)}); err != nil{
+	block := cached.GetBlock(req.Block)
+	fmt.Println(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	if err := l.CommitWithPvtData(&ledger.BlockAndPvtData{Block: block}); err != nil{
 		return nil, err
 	}
 
