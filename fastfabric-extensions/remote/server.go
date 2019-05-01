@@ -27,7 +27,6 @@ func StartServer(address string) {
 }
 
 type server struct {
-	ledgerProvider ledger.PeerLedgerProvider
 	peerledger     map[string]ledger.PeerLedger
 	iterators      []ledger2.ResultsIterator
 	createLedger   createFn
@@ -145,9 +144,6 @@ func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error
 func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result, error) {
 	fmt.Println("Call to CreateLedger")
 	var err error
-	if s.ledgerProvider == nil {
-		return nil, fmt.Errorf("ledgerProvider must be set on this peer, is currently nil")
-	}
 
 	s.peerledger[req.LedgerId], err = s.createLedger(req.Block)
 	if err != nil {
