@@ -3,6 +3,7 @@ package statedb
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"sync"
 )
 
@@ -23,6 +24,7 @@ func (ht *ValueHashtable) Put(key []byte, value []byte) error {
 		ht.items = make(map[string][]byte)
 	}
 	ht.items[string(key)] = value
+	fmt.Println(string(key),string(value))
 	return nil
 }
 
