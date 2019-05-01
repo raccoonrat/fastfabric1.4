@@ -24,7 +24,7 @@ func (ht *ValueHashtable) Put(key []byte, value []byte) error {
 		ht.items = make(map[string][]byte)
 	}
 	ht.items[string(key)] = value
-	fmt.Println(string(key),string(value))
+	fmt.Println("Write key:",string(key))
 	return nil
 }
 
