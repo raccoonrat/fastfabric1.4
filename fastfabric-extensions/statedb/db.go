@@ -3,6 +3,7 @@ package statedb
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/core/common/ccprovider"
@@ -91,6 +92,7 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 	if config.IsStorage {
 		return ledger.lvldb.GetIterator(sk, ek)
 	}
+	fmt.Println("iterator start:", string(sk), ", end:", string(ek))
 
 	keys := ledger.db.GetKeys(sk, ek)
 	return &Iterimpl{keys:keys, idx:0, db:ledger.db}
