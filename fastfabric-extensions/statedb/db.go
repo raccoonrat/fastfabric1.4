@@ -66,7 +66,6 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 	if config.IsStorage {
 		return ledger.lvldb.GetIterator(sk, ek)
 	}
-	fmt.Println("iterator start:", string(sk), ", end:", string(ek))
 
 	keys := ledger.db.getKeys(sk, ek)
 	itr := &Iterimpl{keys:keys, idx:-1, values:make(map[string][]byte)}
