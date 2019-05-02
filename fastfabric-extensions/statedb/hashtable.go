@@ -25,6 +25,9 @@ func (ht *ValueHashtable) Put(key []byte, value []byte) error {
 	}
 	ht.items[string(key)] = value
 	fmt.Println("Write key:",string(key))
+	if value != nil {
+		fmt.Println("Write value:", string(value))
+	}
 	return nil
 }
 
@@ -75,6 +78,6 @@ func (ht *ValueHashtable) GetKeys(sk []byte, ek []byte)[][]byte {
 			i++
 		}
 	}
-	fmt.Println("hastable keyrange:", keys[:i])
+	fmt.Println("hashtable keyrange:", keys[:i])
 	return keys[:i]
 }
