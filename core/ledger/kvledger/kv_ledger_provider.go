@@ -134,12 +134,12 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger,
 		if err!= nil{
 			logger.Error(err)
 		}
-		for _, eClient := range remote.GetEndorserPeerClients(){
-			_, err := eClient.CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
-			if err!= nil{
-				logger.Error(err)
-			}
-		}
+		//for _, eClient := range remote.GetEndorserPeerClients(){
+		//	_, err := eClient.CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
+		//	if err!= nil{
+		//		logger.Error(err)
+		//	}
+		//}
 	}
 	panicOnErr(provider.idStore.createLedgerID(ledgerID, genesisBlock), "Error while marking ledger as created")
 	return lgr, nil
