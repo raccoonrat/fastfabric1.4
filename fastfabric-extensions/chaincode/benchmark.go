@@ -52,7 +52,7 @@ func (t *BenchmarkChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Respons
 		return t.query(stub, args)
 	}
 
-	return shim.Error("Invalid invoke function name. Expecting \"transfer\" \"query\"")
+	return shim.Error(fmt.Sprintf("Invalid invoke function name. Expecting \"transfer\" \"query\", got \"%s\"", function))
 }
 
 // Transaction makes payment of X units from A to B
@@ -63,7 +63,7 @@ func (t *BenchmarkChaincode) transfer(stub shim.ChaincodeStubInterface, args []s
 	var err error
 
 	if len(args) != 3 {
-		return shim.Error("Incorrect number of arguments. Expecting 3")
+		return shim.Error(fmt.Sprintf("Incorrect number of arguments. Expecting 3, got %s", len(args)))
 	}
 
 	A = args[0]
