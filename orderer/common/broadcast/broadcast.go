@@ -115,6 +115,7 @@ func receive(srv ab.AtomicBroadcast_BroadcastServer, addr string, messages chan 
 }
 
 func (bh *Handler) process(messages chan *cb.Envelope, resps chan chan *ab.BroadcastResponse, addr string){
+	defer close(resps)
 	for msg := range messages {
 		done := make(chan *ab.BroadcastResponse)
 		resps <- done
