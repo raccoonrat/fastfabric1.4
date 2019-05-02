@@ -3,7 +3,6 @@ package statedb
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"sync"
 )
 
