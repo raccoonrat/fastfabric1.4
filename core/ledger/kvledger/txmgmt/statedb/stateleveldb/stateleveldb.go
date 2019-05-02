@@ -7,6 +7,7 @@ package stateleveldb
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
@@ -141,6 +142,8 @@ func (vdb *versionedDB) GetStateRangeScanIteratorWithMetadata(namespace string, 
 			requestedLimit = limitOption.(int32)
 		}
 	}
+
+	fmt.Println("stateleveldb keys, start:", startKey, "end:", endKey)
 
 	// Note:  metadata is not used for the goleveldb implementation of the range query
 	compositeStartKey := constructCompositeKey(namespace, startKey)
