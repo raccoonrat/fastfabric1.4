@@ -245,6 +245,19 @@ func (scanner *kvScanner) Next() (statedb.QueryResult, error) {
 
 	dbKey := scanner.dbItr.Key()
 	dbVal := scanner.dbItr.Value()
+
+	if dbKey != nil {
+		fmt.Println("stateleveldb Next(), key:", string(dbKey))
+	}else{
+		fmt.Println("stateleveldb Next(), key:", "nil")
+	}
+
+	if dbKey != nil {
+		fmt.Println("stateleveldb Next(), value:", string(dbVal))
+	}else{
+		fmt.Println("stateleveldb Next(), value:", "nil")
+	}
+
 	dbValCopy := make([]byte, len(dbVal))
 	copy(dbValCopy, dbVal)
 	_, key := splitCompositeKey(dbKey)
