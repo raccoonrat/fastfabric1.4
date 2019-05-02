@@ -17,6 +17,7 @@ limitations under the License.
 package statedb
 
 import (
+	"fmt"
 	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/op/go-logging"
@@ -141,6 +142,7 @@ func (h *DBHandle) GetIterator(startKey []byte, endKey []byte) *Iterator {
 	if config.IsStorage{
 		return &Iterator{h.lvlHandle.GetIterator(startKey, endKey)}
 	}else {
+		fmt.Println("provider iterator start:", string(startKey), ", end:", string(endKey))
 		sKey := constructLevelKey(h.dbName, startKey)
 		eKey := constructLevelKey(h.dbName, endKey)
 		if endKey == nil {
