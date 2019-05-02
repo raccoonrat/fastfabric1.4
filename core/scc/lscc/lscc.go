@@ -417,6 +417,8 @@ func (lscc *LifeCycleSysCC) getChaincodes(stub shim.ChaincodeStubInterface) pb.R
 	// array to store metadata for all chaincode entries from LSCC
 	var ccInfoArray []*pb.ChaincodeInfo
 
+	fmt.Println("iterator has next:", itr.HasNext())
+
 	for itr.HasNext() {
 		response, err := itr.Next()
 		if err != nil {
