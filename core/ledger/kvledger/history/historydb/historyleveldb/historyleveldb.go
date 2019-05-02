@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package historyleveldb
 
 import (
+	"fmt"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -132,7 +133,8 @@ func (historyDB *historyDB) Commit(block *cached.Block) error {
 
 					//composite key for history records is in the form ns~key~blockNo~tranNo
 					compositeHistoryKey := historydb.ConstructCompositeHistoryKey(ns, writeKey, blockNo, tranNo)
-
+					fmt.Println("compositeHistoryKey:", string(compositeHistoryKey))
+					fmt.Println("compositeHistoryKey bytes:", compositeHistoryKey)
 					// No value is required, write an empty byte array (emptyValue) since Put() of nil is not allowed
 					dbBatch.Put(compositeHistoryKey, emptyValue)
 				}
