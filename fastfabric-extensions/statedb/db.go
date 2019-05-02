@@ -22,17 +22,6 @@ type DB struct {
 
 func createDB() (*DB){
 	db := &DB {db:NewHT()}
-	//ccname := "PaymentApp"
-	//cdbytes := utils.MarshalOrPanic(&ccprovider.ChaincodeData{
-	//	Name:    ccname,
-	//	Version: "v1",
-	//	Vscc:    "vscc",
-	//	Policy:  signedByAnyMember([]string{"SampleOrg"}),
-	//})
-	//
-	//db.Put(constructLevelKey(experiment.Current.ChannelId, constructCompositeKey("lscc", ccname)),
-	//	encodeValue(cdbytes, version.NewHeight(0, 0)), true)
-
 	return db
 }
 
@@ -83,6 +72,10 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 	fmt.Println("iterator start:", string(sk), ", end:", string(ek))
 
 	keys := ledger.db.GetKeys(sk, ek)
+	for _,key := range keys{
+		v, _ :=ledger.db.Get(key)
+		fmt.Println("iterator value for key", string(key),"-", string(v))
+	}
 	return &Iterimpl{keys:keys, idx:-1, db:ledger.db}
 }
 
