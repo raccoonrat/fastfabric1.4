@@ -26,7 +26,11 @@ func (ht *ValueHashtable) Put(key []byte, value []byte) error {
 	ht.items[string(key)] = value
 	fmt.Println("Write key:",string(key))
 	if value != nil {
-		fmt.Println("Write value:", string(value))
+		l := len(value)
+		if l >200{
+			l= 200
+		}
+		fmt.Println("Write value:", string(value[:l]))
 	}
 	return nil
 }
