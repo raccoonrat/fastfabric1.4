@@ -68,7 +68,7 @@ func (ht *ValueHashtable) GetKeys(sk []byte, ek []byte)[][]byte {
 		sk = sk[:len(sk)-1]
 	}
 
-	if len(ek)!= 0 && sk[len(ek)-1] == 0x01{
+	if len(ek)!= 0 && ek[len(ek)-1] == 0x01{
 		ek = ek[:len(ek)-1]
 		ek[len(ek)-1] += 1
 	}
