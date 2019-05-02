@@ -142,6 +142,7 @@ func (h *DBHandle) GetIterator(startKey []byte, endKey []byte) *Iterator {
 	if config.IsStorage{
 		return &Iterator{h.lvlHandle.GetIterator(startKey, endKey)}
 	}else {
+		fmt.Println("provider iterator start is nil:", startKey == nil , ", end is nil:", endKey == nil)
 		fmt.Println("provider iterator start:", string(startKey), ", end:", string(endKey))
 		sKey := constructLevelKey(h.dbName, startKey)
 		eKey := constructLevelKey(h.dbName, endKey)
