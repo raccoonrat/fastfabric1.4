@@ -68,7 +68,7 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 	}
 	fmt.Println("iterator start:", string(sk), ", end:", string(ek))
 
-	keys := ledger.db.GetKeys(sk, ek)
+	keys := ledger.db.getItems(sk, ek)
 	itr := &Iterimpl{keys:keys, idx:-1, values:make(map[string][]byte)}
 	for _,key := range keys{
 		v, err :=ledger.db.Get(key)
@@ -77,7 +77,7 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 			return itr
 		}
 		fmt.Println("iterator value for key", string(key),"-", string(v))
-		itr.values[string(key)] = v
+		itr.values[string(retrieveAppKey(key))] = v
 	}
 	return itr
 }

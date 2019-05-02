@@ -67,21 +67,17 @@ func (ht *ValueHashtable) Cleanup() {
 	ht.items = nil
 }
 
-func (ht *ValueHashtable) GetKeys(sk []byte, ek []byte)[][]byte {
+func (ht *ValueHashtable) getItems(sk []byte, ek []byte)map[string][]byte {
 	ht.lock.RLock()
 	defer ht.lock.RUnlock()
-	keys := make([][]byte, len(ht.items))
+	items := make(map[string][]byte)
 
-
-
-	i := 0
-	for k := range ht.items {
+	for k,v := range ht.items {
 		x := []byte(k)
 		if bytes.Compare(sk, x) < 1 && bytes.Compare(x, ek) < 1 {
-			keys[i] = x
-			i++
+			items[k] = v
 		}
 	}
-	fmt.Println("hashtable keyrange:", keys[:i])
-	return keys[:i]
+	fmt.Println("hashtable keyrange:", items)
+	return items
 }
