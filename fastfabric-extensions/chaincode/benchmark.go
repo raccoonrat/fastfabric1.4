@@ -17,7 +17,7 @@ func (t *BenchmarkChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response 
 	_, args := stub.GetFunctionAndParameters()
 
 	if len(args) != 2 {
-		return shim.Error("Incorrect number of arguments. Expecting 4")
+		return shim.Error(fmt.Sprintf("Incorrect number of arguments. Expecting 4, got %v", len(args)))
 	}
 
 	// Initialize the chaincode
@@ -63,14 +63,12 @@ func (t *BenchmarkChaincode) transfer(stub shim.ChaincodeStubInterface, args []s
 	var err error
 
 	if len(args) != 3 {
-		return shim.Error(fmt.Sprintf("Incorrect number of arguments. Expecting 3, got %s", len(args)))
+		return shim.Error(fmt.Sprintf("Incorrect number of arguments. Expecting 3, got %v", len(args)))
 	}
 
 	A = args[0]
 	B = args[1]
 
-	// Get the state from the ledger
-	// TODO: will be nice to have a GetAllState call to ledger
 	Avalbytes, err := stub.GetState(A)
 	if err != nil {
 		return shim.Error("Failed to get state")

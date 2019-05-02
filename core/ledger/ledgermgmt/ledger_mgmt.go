@@ -116,12 +116,6 @@ func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 		if err!= nil{
 			logger.Error(err)
 		}
-		//for _, eClient := range remote.GetEndorserPeerClients(){
-		//	_, err := eClient.CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
-		//	if err!= nil{
-		//		logger.Error(err)
-		//	}
-		//}
 	}
 	if config.IsEndorser{
 		remote.SetLedger(id, l)

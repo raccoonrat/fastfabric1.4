@@ -9,6 +9,7 @@ package kvledger
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/confighistory"
@@ -126,7 +127,6 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger,
 		lgr.Close()
 		return nil, err
 	}
-
 	panicOnErr(provider.idStore.createLedgerID(ledgerID, genesisBlock), "Error while marking ledger as created")
 	return lgr, nil
 }

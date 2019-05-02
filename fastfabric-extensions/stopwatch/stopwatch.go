@@ -54,7 +54,7 @@ func FlushSingle(label string, series chan *measurement) {
 	if !ok {
 		f = DefaultOutput
 	}
-	fmt.Println("Flushing", label)
+	fmt.Println("Flushing measurements to output", label)
 	for m := range series {
 		if f != nil && !m.end.IsZero() {
 			_,_ = fmt.Fprintln(f, m.Duration().Nanoseconds(), "\t", m.comment)
@@ -63,7 +63,7 @@ func FlushSingle(label string, series chan *measurement) {
 }
 
 func Flush() {
-	fmt.Println("Start flushing")
+	fmt.Println("Start flushing measurements")
 	wg := &sync.WaitGroup{}
 	for label, data := range measurements {
 		wg.Add(1)

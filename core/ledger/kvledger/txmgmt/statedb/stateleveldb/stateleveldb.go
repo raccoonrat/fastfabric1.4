@@ -7,7 +7,7 @@ package stateleveldb
 
 import (
 	"bytes"
-	"fmt"
+
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
@@ -141,11 +141,10 @@ func (vdb *versionedDB) GetStateRangeScanIteratorWithMetadata(namespace string, 
 			requestedLimit = limitOption.(int32)
 		}
 	}
+
 	// Note:  metadata is not used for the goleveldb implementation of the range query
 	compositeStartKey := constructCompositeKey(namespace, startKey)
 	compositeEndKey := constructCompositeKey(namespace, endKey)
-
-	fmt.Printf("stateleveldb keys, start: %#v, end: %#v\n", compositeStartKey, compositeEndKey)
 	if endKey == "" {
 		compositeEndKey[len(compositeEndKey)-1] = lastKeyIndicator
 	}
@@ -245,19 +244,6 @@ func (scanner *kvScanner) Next() (statedb.QueryResult, error) {
 
 	dbKey := scanner.dbItr.Key()
 	dbVal := scanner.dbItr.Value()
-
-	if dbKey != nil {
-		fmt.Println("stateleveldb Next(), key:", string(dbKey))
-	}else{
-		fmt.Println("stateleveldb Next(), key:", "nil")
-	}
-
-	if dbKey != nil {
-		fmt.Println("stateleveldb Next(), value:", string(dbVal))
-	}else{
-		fmt.Println("stateleveldb Next(), value:", "nil")
-	}
-
 	dbValCopy := make([]byte, len(dbVal))
 	copy(dbValCopy, dbVal)
 	_, key := splitCompositeKey(dbKey)
