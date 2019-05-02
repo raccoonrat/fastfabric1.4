@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
-	"github.com/hyperledger/fabric/core/common/ccprovider"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
-	"github.com/hyperledger/fabric/fastfabric-extensions/experiment"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -22,28 +20,18 @@ type DB struct {
 	lvldb *leveldbhelper.DB
 }
 
-func CreateDB(path string) (*DB){
-	if config.IsStorage{
-		return &DB{lvldb: leveldbhelper.CreateDB(&leveldbhelper.Conf{path})}
-	}else {
-		return createDB()
-	}
-
-
-}
-
 func createDB() (*DB){
 	db := &DB {db:NewHT()}
-	ccname := "PaymentApp"
-	cdbytes := utils.MarshalOrPanic(&ccprovider.ChaincodeData{
-		Name:    ccname,
-		Version: "v1",
-		Vscc:    "vscc",
-		Policy:  signedByAnyMember([]string{"SampleOrg"}),
-	})
-
-	db.Put(constructLevelKey(experiment.Current.ChannelId, constructCompositeKey("lscc", ccname)),
-		encodeValue(cdbytes, version.NewHeight(0, 0)), true)
+	//ccname := "PaymentApp"
+	//cdbytes := utils.MarshalOrPanic(&ccprovider.ChaincodeData{
+	//	Name:    ccname,
+	//	Version: "v1",
+	//	Vscc:    "vscc",
+	//	Policy:  signedByAnyMember([]string{"SampleOrg"}),
+	//})
+	//
+	//db.Put(constructLevelKey(experiment.Current.ChannelId, constructCompositeKey("lscc", ccname)),
+	//	encodeValue(cdbytes, version.NewHeight(0, 0)), true)
 
 	return db
 }
