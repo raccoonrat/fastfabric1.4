@@ -64,30 +64,17 @@ func (ht *ValueHashtable) GetKeys(sk []byte, ek []byte)[][]byte {
 	ht.lock.RLock()
 	defer ht.lock.RUnlock()
 	keys := make([][]byte, len(ht.items))
-	if len(sk)!= 0 && sk[len(sk)-1] == 0x01{
-		sk = sk[:len(sk)-1]
-	}
 
-	if len(ek)!= 0 && ek[len(ek)-1] == 0x01{
-		ek = ek[:len(ek)-1]
-		ek[len(ek)-1] += 1
-	}
-	fmt.Println("hastable start:", string(sk), ", end:", string(ek))
+
 
 	i := 0
 	for k := range ht.items {
-		fmt.Println("key int table:", k)
 		x := []byte(k)
-		var toCompare []byte
-		if (len(x)> len(ek)){
-			toCompare = x[:len(ek)]
-		}else{
-			toCompare = x
-		}
-		if bytes.Compare(sk, toCompare) < 1 && bytes.Compare(toCompare, ek) < 1 {
+		if bytes.Compare(sk, x) < 1 && bytes.Compare(x, ek) < 1 {
 			keys[i] = x
 			i++
 		}
 	}
+	fmt.Println("hastable keyrange:", keys[:i])
 	return keys[:i]
 }
