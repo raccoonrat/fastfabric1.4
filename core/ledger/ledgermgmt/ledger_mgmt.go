@@ -8,6 +8,7 @@ package ledgermgmt
 
 import (
 	"bytes"
+	"context"
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"sync"
@@ -109,6 +110,23 @@ func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 	}
 	l = wrapLedger(id, l)
 	openedLedgers[id] = l
+
+	if !config.IsStorage && !config.IsEndorser {
+		_, err := remote.GetStoragePeerClient().CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: id, Block: genesisBlock})
+		if err!= nil{
+			logger.Error(err)
+		}
+		//for _, eClient := range remote.GetEndorserPeerClients(){
+		//	_, err := eClient.CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
+		//	if err!= nil{
+		//		logger.Error(err)
+		//	}
+		//}
+	}
+	if config.IsEndorser{
+		remote.SetLedger(id, l)
+	}
+
 	logger.Infof("Created ledger [%s] with genesis block", id)
 	return l, nil
 }

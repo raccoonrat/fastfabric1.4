@@ -159,3 +159,7 @@ func SetCreateLedgerFunc(fn createFn){
 }
 
 type createFn func(genesisBlock *common.Block) (ledger.PeerLedger, error)
+
+func SetLedger(ledgerId string, ledger ledger.PeerLedger){
+	storageServer.peerledger[ledgerId] = ledger
+}

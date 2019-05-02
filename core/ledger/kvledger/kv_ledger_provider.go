@@ -8,7 +8,6 @@ package kvledger
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/core/ledger"
@@ -20,8 +19,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
-	"github.com/hyperledger/fabric/fastfabric-extensions/config"
-	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/fastfabric-extensions/statedb"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -129,18 +126,7 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger,
 		lgr.Close()
 		return nil, err
 	}
-	if !config.IsStorage && !config.IsEndorser {
-		_, err := remote.GetStoragePeerClient().CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
-		if err!= nil{
-			logger.Error(err)
-		}
-		//for _, eClient := range remote.GetEndorserPeerClients(){
-		//	_, err := eClient.CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: ledgerID, Block: genesisBlock})
-		//	if err!= nil{
-		//		logger.Error(err)
-		//	}
-		//}
-	}
+
 	panicOnErr(provider.idStore.createLedgerID(ledgerID, genesisBlock), "Error while marking ledger as created")
 	return lgr, nil
 }
