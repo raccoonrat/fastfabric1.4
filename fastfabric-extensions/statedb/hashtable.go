@@ -76,6 +76,7 @@ func (ht *ValueHashtable) GetKeys(sk []byte, ek []byte)[][]byte {
 
 	i := 0
 	for k := range ht.items {
+		fmt.Println("key int table:", k)
 		x := []byte(k)
 		var toCompare []byte
 		if (len(x)> len(ek)){
