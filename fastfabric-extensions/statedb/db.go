@@ -4,11 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/fastfabric-extensions/config"
-	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
@@ -72,18 +69,24 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 	fmt.Println("iterator start:", string(sk), ", end:", string(ek))
 
 	keys := ledger.db.GetKeys(sk, ek)
+	itr := &Iterimpl{keys:keys, idx:-1, values:make(map[string][]byte)}
 	for _,key := range keys{
-		v, _ :=ledger.db.Get(key)
+		v, err :=ledger.db.Get(key)
+		if err != nil {
+			itr.err = fmt.Errorf("Failed to get value for key %s: %s", key, err)
+			return itr
+		}
 		fmt.Println("iterator value for key", string(key),"-", string(v))
+		itr.values[string(key)] = v
 	}
-	return &Iterimpl{keys:keys, idx:-1, db:ledger.db}
+	return itr
 }
 
 type Iterimpl struct {
 	keys [][]byte
 	idx  int
 	err  error
-	db *ValueHashtable
+	values map[string][]byte
 }
 
 func (i *Iterimpl) First() bool {
@@ -149,27 +152,5 @@ func (i *Iterimpl) Value() []byte {
 		return nil
 	}
 
-	var val []byte
-	val,i.err = i.db.Get(i.Key())
-	return val
-}
-
-
-func signedByAnyMember(ids []string) []byte {
-	p := cauthdsl.SignedByAnyMember(ids)
-	return utils.MarshalOrPanic(p)
-}
-
-var compositeKeySep = []byte{0x00}
-
-func constructCompositeKey(ns string, key string) []byte {
-	return append(append([]byte(ns), compositeKeySep...), []byte(key)...)
-}
-
-func encodeValue(value []byte, version *version.Height) []byte {
-	encodedValue := version.ToBytes()
-	if value != nil {
-		encodedValue = append(encodedValue, value...)
-	}
-	return encodedValue
+	return i.values[string(i.Key())]
 }
