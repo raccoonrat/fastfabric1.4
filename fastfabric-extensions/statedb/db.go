@@ -95,7 +95,7 @@ func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
 	fmt.Println("iterator start:", string(sk), ", end:", string(ek))
 
 	keys := ledger.db.GetKeys(sk, ek)
-	return &Iterimpl{keys:keys, idx:0, db:ledger.db}
+	return &Iterimpl{keys:keys, idx:-1, db:ledger.db}
 }
 
 type Iterimpl struct {

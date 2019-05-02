@@ -230,6 +230,10 @@ type kvScanner struct {
 }
 
 func newKVScanner(namespace string, dbItr iterator.Iterator, requestedLimit int32) *kvScanner {
+	for dbItr.Next()  {
+		fmt.Println("building iterator, key:",string(dbItr.Key()))
+	}
+	dbItr.First()
 	return &kvScanner{namespace, dbItr, requestedLimit, 0}
 }
 
