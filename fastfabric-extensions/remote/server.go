@@ -137,7 +137,6 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 		return nil, err
 	}
 
-	remoteLogger.Info("ledger constructed:", req.LedgerId)
 	return &Result{}, nil
 }
 

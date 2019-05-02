@@ -153,8 +153,9 @@ func (s *GossipStateProviderImpl) validate(pipeline *parallel.Pipeline) {
 func (s *GossipStateProviderImpl) Stop() {
 	// Make sure stop won't be executed twice
 	// and stop channel won't be used again
-
-	stopwatch.Flush()
+	if config.IsBenchmark {
+		stopwatch.Flush()
+	}
 	s.once.Do(func() {
 		s.stopCh <- struct{}{}
 		// Make sure all go-routines has finished
