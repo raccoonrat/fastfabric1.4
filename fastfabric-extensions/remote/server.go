@@ -8,13 +8,14 @@ import (
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/fastfabric-extensions"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/state"
 	"github.com/hyperledger/fabric/protos/common"
 	"google.golang.org/grpc"
 	"net"
 )
 
 var remoteLogger = flogging.MustGetLogger("remote")
-var storageServer = &server{peerLedger: make(map[string]ledger.PeerLedger)}
+var storageServer = &server{peerLedger: make(map[string]ledger.PeerLedger),blockBuffers:make(map[string]state.PayloadsBuffer), err: make(chan error,1 )}
 
 func StartServer(address string) {
 	lis, err := net.Listen("tcp", address)
@@ -31,6 +32,8 @@ type server struct {
 	peerLedger   map[string]ledger.PeerLedger
 	iterators    []ledger2.ResultsIterator
 	createLedger createFn
+	blockBuffers map[string]state.PayloadsBuffer
+	err 		chan error
 }
 
 func (s *server) IteratorNext(ctx context.Context, itr  *Iterator) (*common.Block, error) {
@@ -117,15 +120,18 @@ func (s *server) RetrieveBlockByHash(ctx context.Context, req *RetrieveBlockByHa
 }
 
 func (s *server) Store(ctx context.Context, req *StorageRequest) (*Result, error) {
-	l := s.peerLedger[req.LedgerId]
-	if l == nil {
+	b := s.blockBuffers[req.LedgerId]
+	if b == nil {
 		return nil, fmt.Errorf("store not initialized yet")
 	}
-	block := cached.GetBlock(req.Block)
-	if err := l.CommitWithPvtData(&ledger.BlockAndPvtData{Block: block}); err != nil{
+	if len(s.err) != 0 {
+		err := <-s.err
+		s.err <- err
 		return nil, err
 	}
 
+	block := cached.GetBlock(req.Block)
+	b.Push(block)
 	return &Result{}, nil
 }
 
@@ -137,7 +143,24 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 		return nil, err
 	}
 
+	s.blockBuffers[req.LedgerId] = state.NewPayloadsBuffer(1)
+	go s.processBlocks(s.blockBuffers[req.LedgerId], s.peerLedger[req.LedgerId])
+
 	return &Result{}, nil
+}
+
+func (s *server) processBlocks(buffer state.PayloadsBuffer, l ledger.PeerLedger) {
+	defer buffer.Close()
+	for {
+		select {
+		case <- buffer.Ready():
+			block := buffer.Pop()
+			if err := l.CommitWithPvtData(&ledger.BlockAndPvtData{Block: block}); err != nil{
+				s.err <- err
+				break;
+			}
+		}
+	}
 }
 
 func SetCreateLedgerFunc(fn createFn){

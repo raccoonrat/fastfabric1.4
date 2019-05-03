@@ -99,6 +99,7 @@ func (b *PayloadsBufferImpl) Next() uint64 {
 func (b *PayloadsBufferImpl) Pop() *cached.Block {
 	b.mutex.Lock()
 	defer b.mutex.Unlock()
+	defer b.checkForReady()
 
 
 	result := b.buf[b.Next()]
@@ -110,7 +111,6 @@ func (b *PayloadsBufferImpl) Pop() *cached.Block {
 		atomic.AddUint64(&b.next, 1)
 
 		b.drainReadChannel()
-
 	}
 	return result
 }
