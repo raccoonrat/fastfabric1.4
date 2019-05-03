@@ -7,11 +7,11 @@ import (
 	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/fastfabric-extensions/stopwatch"
+	common2 "github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/gossip/state"
 	"github.com/hyperledger/fabric/gossip/util"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/transientstore"
-	common2 "github.com/hyperledger/fabric/gossip/common"
 	"github.com/pkg/errors"
 	"sync"
 )
@@ -43,7 +43,7 @@ type ledgerResources interface {
 type GossipStateProviderImpl struct {
 	state.GossipStateProvider
 	chainID string
-	buffer PayloadsBuffer
+	buffer  cached.PayloadsBuffer
 
 	mediator *state.ServicesMediator
 	ledgerResources
@@ -74,9 +74,9 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 		chainID:             chainID,
 		mediator:            services,
 		ledgerResources:     ledger,
-		buffer:              NewPayloadsBuffer(height),
+		buffer:              cached.NewPayloadsBuffer(height),
 		sClient:             remote.GetStoragePeerClient(),
-		eClients:			 remote.GetEndorserPeerClients(),
+		eClients:            remote.GetEndorserPeerClients(),
 		stopCh:              make(chan struct{}, 1),
 		once:                sync.Once{}}
 	gsp.done.Add(1)
