@@ -43,7 +43,7 @@ type ledgerResources interface {
 type GossipStateProviderImpl struct {
 	state.GossipStateProvider
 	chainID string
-	buffer  cached.PayloadsBuffer
+	buffer  parallel.PayloadsBuffer
 
 	mediator *state.ServicesMediator
 	ledgerResources
@@ -74,7 +74,7 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 		chainID:             chainID,
 		mediator:            services,
 		ledgerResources:     ledger,
-		buffer:              cached.NewPayloadsBuffer(height),
+		buffer:              parallel.NewPayloadsBuffer(height),
 		sClient:             remote.GetStoragePeerClient(),
 		eClients:            remote.GetEndorserPeerClients(),
 		stopCh:              make(chan struct{}, 1),

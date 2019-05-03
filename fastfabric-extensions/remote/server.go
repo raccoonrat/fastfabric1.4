@@ -8,13 +8,14 @@ import (
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/fastfabric-extensions"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/parallel"
 	"github.com/hyperledger/fabric/protos/common"
 	"google.golang.org/grpc"
 	"net"
 )
 
 var remoteLogger = flogging.MustGetLogger("remote")
-var storageServer = &server{peerLedger: make(map[string]ledger.PeerLedger),blockBuffers:make(map[string]cached.PayloadsBuffer), err: make(chan error,1 )}
+var storageServer = &server{peerLedger: make(map[string]ledger.PeerLedger),blockBuffers:make(map[string]parallel.PayloadsBuffer), err: make(chan error,1 )}
 
 func StartServer(address string) {
 	lis, err := net.Listen("tcp", address)
@@ -31,7 +32,7 @@ type server struct {
 	peerLedger   map[string]ledger.PeerLedger
 	iterators    []ledger2.ResultsIterator
 	createLedger createFn
-	blockBuffers map[string]cached.PayloadsBuffer
+	blockBuffers map[string]parallel.PayloadsBuffer
 	err 		chan error
 }
 
@@ -142,13 +143,13 @@ func (s *server) CreateLedger(ctx context.Context, req *StorageRequest) (*Result
 		return nil, err
 	}
 
-	s.blockBuffers[req.LedgerId] = cached.NewPayloadsBuffer(1)
+	s.blockBuffers[req.LedgerId] = parallel.NewPayloadsBuffer(1)
 	go s.processBlocks(s.blockBuffers[req.LedgerId], s.peerLedger[req.LedgerId])
 
 	return &Result{}, nil
 }
 
-func (s *server) processBlocks(buffer cached.PayloadsBuffer, l ledger.PeerLedger) {
+func (s *server) processBlocks(buffer parallel.PayloadsBuffer, l ledger.PeerLedger) {
 	defer buffer.Close()
 	for {
 		select {
