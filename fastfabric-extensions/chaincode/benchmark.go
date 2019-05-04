@@ -50,9 +50,12 @@ func (t *BenchmarkChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Respons
 	} else if function == "query" {
 		// the old "Query" is now implemtned in invoke
 		return t.query(stub, args)
+	} else if function == "init" {
+		// the old "Query" is now implemtned in invoke
+		return t.Init(stub)
 	}
 
-	return shim.Error(fmt.Sprintf("Invalid invoke function name. Expecting \"transfer\" \"query\", got \"%s\"", function))
+	return shim.Error(fmt.Sprintf("Invalid invoke function name. Expecting \"init\", \"transfer\" or \"query\", got \"%s\"", function))
 }
 
 // Transaction makes payment of X units from A to B
