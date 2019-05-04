@@ -10,29 +10,29 @@ import (
 
 // SimpleChaincode example simple Chaincode implementation
 type BenchmarkChaincode struct {
-	accountCount int
 }
 
 func (t *BenchmarkChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
 	_, args := stub.GetFunctionAndParameters()
 
-	if len(args) != 2 {
-		return shim.Error(fmt.Sprintf("Incorrect number of arguments. Expecting 4, got %v", len(args)))
+	if len(args) != 3 {
+		return shim.Error(fmt.Sprintf("Incorrect number of arguments. Expecting 3, got %v", len(args)))
 	}
 
 	// Initialize the chaincode
 	var err error
-	t.accountCount, err = strconv.Atoi(args[0])
+	firstAccount, err := strconv.Atoi(args[0])
+	accountCount, err := strconv.Atoi(args[1])
 	if err != nil {
 		return shim.Error("Expecting integer value for number of accounts")
 	}
-	initValue, err := strconv.Atoi(args[1])
+	initValue, err := strconv.Atoi(args[2])
 	if err != nil {
 		return shim.Error("Expecting integer value for default account value")
 	}
 	// Write the state to the ledger
 
-	for i:=0; i< t.accountCount;i++ {
+	for i:=firstAccount; i< firstAccount+accountCount;i++ {
 		err = stub.PutState("account"+strconv.Itoa(i), []byte(strconv.Itoa(initValue)))
 		if err != nil {
 			return shim.Error(err.Error())
@@ -108,7 +108,6 @@ func (t *BenchmarkChaincode) transfer(stub shim.ChaincodeStubInterface, args []s
 
 	return shim.Success(nil)
 }
-
 
 // query callback representing the query of a chaincode
 func (t *BenchmarkChaincode) query(stub shim.ChaincodeStubInterface, args []string) pb.Response {
