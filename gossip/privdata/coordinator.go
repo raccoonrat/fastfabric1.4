@@ -20,7 +20,6 @@ import (
 	"github.com/hyperledger/fabric/core/committer/txvalidator"
 	"github.com/hyperledger/fabric/core/common/privdata"
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/transientstore"
 	privdatacommon "github.com/hyperledger/fabric/gossip/privdata/common"
 	"github.com/hyperledger/fabric/gossip/util"
@@ -29,7 +28,6 @@ import (
 	"github.com/hyperledger/fabric/protos/msp"
 	"github.com/hyperledger/fabric/protos/peer"
 	transientstore2 "github.com/hyperledger/fabric/protos/transientstore"
-	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
@@ -177,7 +175,7 @@ func (c *coordinator) StoreBlock(block *cached.Block, privateDataSets util.PvtDa
 		return err
 	}
 
-	privateInfo, err := c.listMissingPrivateData(block.Block, ownedRWsets)
+	privateInfo, err := c.listMissingPrivateData(block, ownedRWsets)
 	if err != nil {
 		logger.Warning(err)
 		return err
@@ -540,25 +538,19 @@ func (k *rwSetKey) toTxPvtReadWriteSet(rws []byte) *rwset.TxPvtReadWriteSet {
 }
 
 type txns []string
-type blockData [][]byte
-type blockConsumer func(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, endorsers []*peer.Endorsement) error
+type blockData []*cached.Envelope
+type blockConsumer func(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *cached.TxRwSet, endorsers []*peer.Endorsement) error
 
 func (data blockData) forEachTxn(txsFilter txValidationFlags, consumer blockConsumer) (txns, error) {
 	var txList []string
-	for seqInBlock, envBytes := range data {
-		env, err := utils.GetEnvelopeFromBlock(envBytes)
-		if err != nil {
-			logger.Warning("Invalid envelope:", err)
-			continue
-		}
-
-		payload, err := utils.GetPayload(env)
+	for seqInBlock, env := range data {
+		payload, err := env.UnmarshalPayload()
 		if err != nil {
 			logger.Warning("Invalid payload:", err)
 			continue
 		}
 
-		chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
+		chdr, err := payload.Header.UnmarshalChannelHeader()
 		if err != nil {
 			logger.Warning("Invalid channel header:", err)
 			continue
@@ -575,35 +567,40 @@ func (data blockData) forEachTxn(txsFilter txValidationFlags, consumer blockCons
 			continue
 		}
 
-		respPayload, err := utils.GetActionFromEnvelope(envBytes)
-		if err != nil {
-			logger.Warning("Failed obtaining action from envelope", err)
-			continue
-		}
-
-		tx, err := utils.GetTransaction(payload.Data)
-		if err != nil {
+		tx, err := payload.UnmarshalTransaction()
+		if err != nil || len(tx.Actions) == 0{
 			logger.Warning("Invalid transaction in payload data for tx ", chdr.TxId, ":", err)
 			continue
 		}
 
-		ccActionPayload, err := utils.GetChaincodeActionPayload(tx.Actions[0].Payload)
+		actPl, err := tx.Actions[0].UnmarshalChaincodeActionPayload()
 		if err != nil {
 			logger.Warning("Invalid chaincode action in payload for tx", chdr.TxId, ":", err)
 			continue
 		}
 
-		if ccActionPayload.Action == nil {
+		if actPl.Action == nil {
 			logger.Warning("Action in ChaincodeActionPayload for", chdr.TxId, "is nil")
 			continue
 		}
 
-		txRWSet := &rwsetutil.TxRwSet{}
-		if err = txRWSet.FromProtoBytes(respPayload.Results); err != nil {
+		propRespPl, err := actPl.Action.UnmarshalProposalResponsePayload()
+		if err != nil {
+			logger.Warning("Failed obtaining action from envelope", err)
+			continue
+		}
+		act, err := propRespPl.UnmarshalChaincodeAction()
+		if err != nil {
+			logger.Warning("Failed obtaining action from envelope", err)
+			continue
+		}
+
+		txRWSet, err := act.UnmarshalRwSet()
+		if err != nil {
 			logger.Warning("Failed obtaining TxRwSet from ChaincodeAction's results", err)
 			continue
 		}
-		err = consumer(uint64(seqInBlock), chdr, txRWSet, ccActionPayload.Action.Endorsements)
+		err = consumer(uint64(seqInBlock), chdr.ChannelHeader, txRWSet, actPl.Action.Endorsements)
 		if err != nil {
 			return txList, err
 		}
@@ -638,7 +635,7 @@ type privateDataInfo struct {
 }
 
 // listMissingPrivateData identifies missing private write sets and attempts to retrieve them from local transient store
-func (c *coordinator) listMissingPrivateData(block *common.Block, ownedRWsets map[rwSetKey][]byte) (*privateDataInfo, error) {
+func (c *coordinator) listMissingPrivateData(block *cached.Block, ownedRWsets map[rwSetKey][]byte) (*privateDataInfo, error) {
 	if block.Metadata == nil || len(block.Metadata.Metadata) <= int(common.BlockMetadataIndex_TRANSACTIONS_FILTER) {
 		return nil, errors.New("Block.Metadata is nil or Block.Metadata lacks a Tx filter bitmap")
 	}
@@ -650,7 +647,8 @@ func (c *coordinator) listMissingPrivateData(block *common.Block, ownedRWsets ma
 	sources := make(map[rwSetKey][]*peer.Endorsement)
 	privateRWsetsInBlock := make(map[rwSetKey]struct{})
 	missing := make(rwSetKeysByTxIDs)
-	data := blockData(block.Data.Data)
+	envs, _ := block.UnmarshalAllEnvelopes()
+	data := blockData(envs)
 	bi := &transactionInspector{
 		sources:              sources,
 		missingKeys:          missing,
@@ -703,7 +701,7 @@ type transactionInspector struct {
 	missingRWSButIneligible []rwSetKey
 }
 
-func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, endorsers []*peer.Endorsement) error {
+func (bi *transactionInspector) inspectTransaction(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *cached.TxRwSet, endorsers []*peer.Endorsement) error {
 	for _, ns := range txRWSet.NsRwSets {
 		for _, hashedCollection := range ns.CollHashedRwSets {
 			if !containsWrites(chdr.TxId, ns.NameSpace, hashedCollection) {
@@ -834,8 +832,9 @@ func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common
 	}
 
 	seqs2Namespaces := aggregatedCollections(make(map[seqAndDataModel]map[string][]*rwset.CollectionPvtReadWriteSet))
-	data := blockData(blockAndPvtData.Block.Data.Data)
-	data.forEachTxn(make(txValidationFlags, len(data)), func(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *rwsetutil.TxRwSet, _ []*peer.Endorsement) error {
+	envs, _ := blockAndPvtData.Block.UnmarshalAllEnvelopes()
+	data := blockData(envs)
+	data.forEachTxn(make(txValidationFlags, len(data)), func(seqInBlock uint64, chdr *common.ChannelHeader, txRWSet *cached.TxRwSet, _ []*peer.Endorsement) error {
 		item, exists := blockAndPvtData.PvtData[seqInBlock]
 		if !exists {
 			return nil
@@ -873,7 +872,7 @@ func (c *coordinator) GetPvtDataAndBlockByNum(seqNum uint64, peerAuthInfo common
 }
 
 // containsWrites checks whether the given CollHashedRwSet contains writes
-func containsWrites(txID string, namespace string, colHashedRWSet *rwsetutil.CollHashedRwSet) bool {
+func containsWrites(txID string, namespace string, colHashedRWSet *cached.CollHashedRwSet) bool {
 	if colHashedRWSet.HashedRwSet == nil {
 		logger.Warningf("HashedRWSet of tx %s, namespace %s, collection %s is nil", txID, namespace, colHashedRWSet.CollectionName)
 		return false
