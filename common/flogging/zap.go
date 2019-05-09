@@ -59,7 +59,7 @@ func (f *FabricLogger) DPanic(args ...interface{})                    { f.s.DPan
 func (f *FabricLogger) DPanicf(template string, args ...interface{})  { f.s.DPanicf(template, args...) }
 func (f *FabricLogger) DPanicw(msg string, kvPairs ...interface{})    { f.s.DPanicw(msg, kvPairs...) }
 func (f *FabricLogger) Debug(args ...interface{})                     { f.s.Debugf(formatArgs(args)) }
-func (f *FabricLogger) Debugf(template string, args ...interface{})   { f.s.Debugf(template, args...) }
+func (f *FabricLogger) Debugf(template string, args ...interface{})   {  }
 func (f *FabricLogger) Debugw(msg string, kvPairs ...interface{})     { f.s.Debugw(msg, kvPairs...) }
 func (f *FabricLogger) Error(args ...interface{})                     { f.s.Errorf(formatArgs(args)) }
 func (f *FabricLogger) Errorf(template string, args ...interface{})   { f.s.Errorf(template, args...) }
