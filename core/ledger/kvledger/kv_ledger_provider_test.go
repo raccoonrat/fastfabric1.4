@@ -18,6 +18,7 @@ package kvledger
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"os"
 	"path/filepath"
 	"testing"
@@ -105,7 +106,7 @@ func TestRecovery(t *testing.T) {
 	// now create the genesis block
 	genesisBlock, _ := configtxtest.MakeGenesisBlock(constructTestLedgerID(1))
 	ledger, err := provider.(*Provider).openInternal(constructTestLedgerID(1))
-	ledger.CommitWithPvtData(&lgr.BlockAndPvtData{Block: genesisBlock})
+	ledger.CommitWithPvtData(&lgr.BlockAndPvtData{Block: cached.GetBlock(genesisBlock)})
 	ledger.Close()
 
 	// Case 1: assume a crash happens, force underconstruction flag to be set to simulate

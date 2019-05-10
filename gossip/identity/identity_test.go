@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"strings"
 	"testing"
 	"time"
@@ -77,7 +78,7 @@ func (*naiveCryptoService) GetPKIidOfCert(peerIdentity api.PeerIdentityType) com
 
 // VerifyBlock returns nil if the block is properly signed,
 // else returns error
-func (*naiveCryptoService) VerifyBlock(chainID common.ChainID, seqNum uint64, signedBlock []byte) error {
+func (*naiveCryptoService) VerifyBlock(chainID common.ChainID, seqNum uint64, signedBlock *cached.Block) error {
 	return nil
 }
 

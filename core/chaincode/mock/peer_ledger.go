@@ -2,12 +2,13 @@
 package mock
 
 import (
-	sync "sync"
+	"github.com/hyperledger/fabric/fastfabric-extensions"
+	"sync"
 
-	ledger "github.com/hyperledger/fabric/common/ledger"
+	"github.com/hyperledger/fabric/common/ledger"
 	ledgera "github.com/hyperledger/fabric/core/ledger"
-	common "github.com/hyperledger/fabric/protos/common"
-	peer "github.com/hyperledger/fabric/protos/peer"
+	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/peer"
 )
 
 type PeerLedger struct {
@@ -256,6 +257,10 @@ type PeerLedger struct {
 	invocationsMutex sync.RWMutex
 }
 
+func (fake *PeerLedger) GetBlockstore() (store fastfabric_extensions.BlockStore) {
+	panic("implement me")
+}
+	
 func (fake *PeerLedger) Close() {
 	fake.closeMutex.Lock()
 	fake.closeArgsForCall = append(fake.closeArgsForCall, struct {

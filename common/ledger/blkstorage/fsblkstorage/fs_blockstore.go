@@ -40,7 +40,7 @@ func newFsBlockStore(id string, conf *Conf, indexConfig *blkstorage.IndexConfig,
 
 // AddBlock adds a new block
 func (store *fsBlockStore) AddBlock(block *cached.Block) error {
-	return store.fileMgr.addBlock(block.Block)
+	return store.fileMgr.addBlock(block)
 }
 
 // GetBlockchainInfo returns the current info about blockchain

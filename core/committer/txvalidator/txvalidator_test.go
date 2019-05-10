@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package txvalidator
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -277,12 +278,12 @@ func TestTxValidationFailure_InvalidTxid(t *testing.T) {
 
 	// Commit block to the ledger
 	ledger.CommitWithPvtData(&ledger2.BlockAndPvtData{
-		Block: block,
+		Block: cached.GetBlock(block),
 	})
 
 	// Validation should invalidate transaction,
 	// because it's already committed
-	tValidator.Validate(block)
+	tValidator.Validate(cached.GetBlock(block))
 
 	txsfltr := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
 	assert.True(t, txsfltr.IsInvalid(0))
@@ -356,7 +357,7 @@ func TestGetTxCCInstance(t *testing.T) {
 	}
 
 	tValidator := &TxValidator{}
-	invokeCCIns, upgradeCCIns, err := tValidator.getTxCCInstance(payload)
+	invokeCCIns, upgradeCCIns, err := tValidator.getTxCCInstance(&cached.Payload{Payload: payload})
 	if err != nil {
 		t.Fatalf("Get chaincode from tx error: %s", err)
 	}

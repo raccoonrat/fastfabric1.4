@@ -17,6 +17,7 @@ limitations under the License.
 package fsblkstorage
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"sync"
 	"testing"
 	"time"
@@ -167,7 +168,7 @@ func iterateInBackground(t *testing.T, itr *blocksItr, quitAfterBlkNum uint64, w
 	}
 }
 
-func testIterateAndVerify(t *testing.T, itr *blocksItr, blocks []*common.Block, readyAt int, readyChan chan<- struct{}, doneChan chan bool) {
+func testIterateAndVerify(t *testing.T, itr *blocksItr, blocks []*cached.Block, readyAt int, readyChan chan<- struct{}, doneChan chan bool) {
 	blocksIterated := 0
 	for {
 		t.Logf("blocksIterated: %v", blocksIterated)
@@ -185,6 +186,6 @@ func testIterateAndVerify(t *testing.T, itr *blocksItr, blocks []*common.Block, 
 	doneChan <- true
 }
 
-func testAppendBlocks(blkfileMgrWrapper *testBlockfileMgrWrapper, blocks []*common.Block) {
+func testAppendBlocks(blkfileMgrWrapper *testBlockfileMgrWrapper, blocks []*cached.Block) {
 	blkfileMgrWrapper.addBlocks(blocks)
 }

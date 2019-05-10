@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"reflect"
 	"sync/atomic"
+	"time"
 
 	"github.com/hyperledger/fabric/common/channelconfig"
 	"github.com/hyperledger/fabric/common/configtx"
@@ -329,7 +330,7 @@ func VerifyBlockHash(indexInBuffer int, blockBuff []*common.Block) error {
 		if !bytes.Equal(block.Header.PreviousHash, prevBlock.Header.Hash()) {
 			claimedPrevHash := hex.EncodeToString(block.Header.PreviousHash)
 			actualPrevHash := hex.EncodeToString(prevBlock.Header.Hash())
-			return errors.Errorf("block %d's hash (%s) mismatches %d's prev block hash (%s)",
+			return errors.Errorf("block [%d]'s hash (%s) mismatches %d's prev block hash (%s)",
 				prevSeq, actualPrevHash, currSeq, claimedPrevHash)
 		}
 	}
@@ -466,7 +467,7 @@ func (vr *VerificationRegistry) BlockCommitted(block *common.Block, channel stri
 	conf, err := ConfigFromBlock(block)
 	// The block doesn't contain a config block, but is a valid block
 	if err == errNotAConfig {
-		vr.Logger.Debugf("Committed block %d for channel %s that is not a config block",
+		vr.Logger.Debugf("Committed block [%d] for channel %s that is not a config block",
 			block.Header.Number, channel)
 		return
 	}
@@ -487,7 +488,7 @@ func (vr *VerificationRegistry) BlockCommitted(block *common.Block, channel stri
 
 	vr.VerifiersByChannel[channel] = verifier
 
-	vr.Logger.Debugf("Committed config block %d for channel %s", block.Header.Number, channel)
+	vr.Logger.Debugf("Committed config block [%d] for channel %s", block.Header.Number, channel)
 }
 
 // BlockToString returns a string representation of this block.
@@ -588,7 +589,7 @@ func LastConfigBlock(block *common.Block, blockRetriever BlockRetriever) (*commo
 	}
 	lastConfigBlock := blockRetriever.Block(lastConfigBlockNum)
 	if lastConfigBlock == nil {
-		return nil, errors.Errorf("unable to retrieve last config block %d", lastConfigBlockNum)
+		return nil, errors.Errorf("unable to retrieve last config block [%d]", lastConfigBlockNum)
 	}
 	return lastConfigBlock, nil
 }
@@ -607,4 +608,30 @@ func (scr *StreamCountReporter) Increment() {
 func (scr *StreamCountReporter) Decrement() {
 	count := atomic.AddUint32(&scr.count, ^uint32(0))
 	scr.Metrics.reportStreamCount(count)
+}
+
+type certificateExpirationCheck struct {
+	minimumExpirationWarningInterval time.Duration
+	expiresAt                        time.Time
+	expirationWarningThreshold       time.Duration
+	lastWarning                      time.Time
+	nodeName                         string
+	endpoint                         string
+	alert                            func(string, ...interface{})
+}
+
+func (exp *certificateExpirationCheck) checkExpiration(currentTime time.Time, channel string) {
+	timeLeft := exp.expiresAt.Sub(currentTime)
+	if timeLeft > exp.expirationWarningThreshold {
+		return
+	}
+
+	timeSinceLastWarning := currentTime.Sub(exp.lastWarning)
+	if timeSinceLastWarning < exp.minimumExpirationWarningInterval {
+		return
+	}
+
+	exp.alert("Certificate of %s from %s for channel %s expires in less than %v",
+		exp.nodeName, exp.endpoint, channel, timeLeft)
+	exp.lastWarning = currentTime
 }

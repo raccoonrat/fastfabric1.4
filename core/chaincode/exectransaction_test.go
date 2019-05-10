@@ -13,6 +13,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"math/rand"
 	"net"
 	"os"
@@ -323,7 +324,7 @@ func endTxSimulation(chainID string, ccid *pb.ChaincodeID, txsim ledger.TxSimula
 			defer _commitLock_.Unlock()
 
 			blockAndPvtData := &ledger.BlockAndPvtData{
-				Block:   block,
+				Block:   cached.GetBlock(block),
 				PvtData: make(ledger.TxPvtDataMap),
 			}
 

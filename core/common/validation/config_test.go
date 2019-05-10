@@ -17,6 +17,7 @@ limitations under the License.
 package validation
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/hyperledger/fabric/common/mocks/config"
@@ -55,7 +56,8 @@ func TestValidateConfigTx(t *testing.T) {
 		}),
 	}
 	updateResult.Signature, _ = signer.Sign(updateResult.Payload)
-	_, txResult := ValidateTransaction(updateResult, &config.MockApplicationCapabilities{})
+	result := cached.Envelope{Envelope:updateResult}
+	_, txResult := ValidateTransaction(&result, &config.MockApplicationCapabilities{})
 	if txResult != peer.TxValidationCode_VALID {
 		t.Fatalf("ValidateTransaction failed, err %s", err)
 		return

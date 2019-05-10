@@ -20,12 +20,12 @@ import (
 	"github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/gossip/discovery"
 	"github.com/hyperledger/fabric/gossip/filter"
+	"github.com/hyperledger/fabric/gossip/metrics"
 	privdatacommon "github.com/hyperledger/fabric/gossip/privdata/common"
 	"github.com/hyperledger/fabric/gossip/util"
 	fcommon "github.com/hyperledger/fabric/protos/common"
 	proto "github.com/hyperledger/fabric/protos/gossip"
 	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -33,7 +33,6 @@ const (
 	membershipPollingBackoff    = time.Second
 	responseWaitTime            = time.Second * 5
 	maxMembershipPollIterations = 5
-	btlPullMarginDefault        = 10
 )
 
 // Dig2PvtRWSetWithConfig
@@ -67,6 +66,7 @@ type gossip interface {
 }
 
 type puller struct {
+	metrics       *metrics.PrivdataMetrics
 	pubSub        *util.PubSub
 	stopChan      chan struct{}
 	msgChan       <-chan proto.ReceivedMessage
@@ -79,13 +79,15 @@ type puller struct {
 }
 
 // NewPuller creates new private data puller
-func NewPuller(cs privdata.CollectionStore, g gossip, dataRetriever PrivateDataRetriever, factory CollectionAccessFactory, channel string) *puller {
+func NewPuller(metrics *metrics.PrivdataMetrics, cs privdata.CollectionStore, g gossip,
+	dataRetriever PrivateDataRetriever, factory CollectionAccessFactory, channel string, btlPullMargin uint64) *puller {
 	p := &puller{
+		metrics:                 metrics,
 		pubSub:                  util.NewPubSub(),
 		stopChan:                make(chan struct{}),
 		channel:                 channel,
 		cs:                      cs,
-		btlPullMargin:           getBtlPullMargin(),
+		btlPullMargin:           btlPullMargin,
 		gossip:                  g,
 		PrivateDataRetriever:    dataRetriever,
 		CollectionAccessFactory: factory,
@@ -150,7 +152,9 @@ func (p *puller) createResponse(message proto.ReceivedMessage) []*proto.PvtDataE
 	block2dig := groupDigestsByBlockNum(msg.GetPrivateReq().Digests)
 
 	for blockNum, digests := range block2dig {
+		start := time.Now()
 		dig2rwSets, wasFetchedFromLedger, err := p.CollectionRWSet(digests, blockNum)
+		p.metrics.RetrieveDuration.With("channel", p.channel).Observe(time.Since(start).Seconds())
 		if err != nil {
 			logger.Warningf("could not obtain private collection rwset for block %d, because of %s, continue...", blockNum, err)
 			continue
@@ -298,6 +302,7 @@ func (p *puller) gatherResponses(subscriptions []util.Subscription) []*proto.Pvt
 	privateElements := make(chan *proto.PvtDataElement, len(subscriptions))
 	var wg sync.WaitGroup
 	wg.Add(len(subscriptions))
+	start := time.Now()
 	// Listen for all subscriptions, and add then into a single channel
 	for _, sub := range subscriptions {
 		go func(sub util.Subscription) {
@@ -307,6 +312,7 @@ func (p *puller) gatherResponses(subscriptions []util.Subscription) []*proto.Pvt
 				return
 			}
 			privateElements <- el.(*proto.PvtDataElement)
+			p.metrics.PullDuration.With("channel", p.channel).Observe(time.Since(start).Seconds())
 		}(sub)
 	}
 	// Wait for all subscriptions to either return, or time out
@@ -689,21 +695,6 @@ func (rp remotePeer) AsRemotePeer() *comm.RemotePeer {
 		PKIID:    common.PKIidType(rp.pkiID),
 		Endpoint: rp.endpoint,
 	}
-}
-
-func getBtlPullMargin() uint64 {
-	var result uint64
-	if viper.IsSet("peer.gossip.pvtData.btlPullMargin") {
-		btlMarginVal := viper.GetInt("peer.gossip.pvtData.btlPullMargin")
-		if btlMarginVal < 0 {
-			result = btlPullMarginDefault
-		} else {
-			result = uint64(btlMarginVal)
-		}
-	} else {
-		result = btlPullMarginDefault
-	}
-	return result
 }
 
 func addWithOverflow(a uint64, b uint64) uint64 {

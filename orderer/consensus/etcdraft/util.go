@@ -8,6 +8,7 @@ package etcdraft
 
 import (
 	"bytes"
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 	"sync"
@@ -34,6 +35,7 @@ import (
 // changes introduced during configuration update
 type MembershipChanges struct {
 	NewBlockMetadata *etcdraft.BlockMetadata
+	NewConsenters    map[uint64]*etcdraft.Consenter
 	AddedNodes       []*etcdraft.Consenter
 	RemovedNodes     []*etcdraft.Consenter
 	ConfChange       *raftpb.ConfChange
@@ -72,7 +74,7 @@ func lastConfigBlockFromSupport(support consensus.ConsenterSupport) (*common.Blo
 	lastBlockSeq := support.Height() - 1
 	lastBlock := support.Block(lastBlockSeq)
 	if lastBlock == nil {
-		return nil, errors.Errorf("unable to retrieve block %d", lastBlockSeq)
+		return nil, errors.Errorf("unable to retrieve block [%d]", lastBlockSeq)
 	}
 	lastConfigBlock, err := cluster.LastConfigBlock(lastBlock, support)
 	if err != nil {
@@ -135,10 +137,10 @@ func newBlockPuller(support consensus.ConsenterSupport,
 }
 
 // RaftPeers maps consenters to slice of raft.Peer
-func RaftPeers(consenters map[uint64]*etcdraft.Consenter) []raft.Peer {
+func RaftPeers(consenterIDs []uint64) []raft.Peer {
 	var peers []raft.Peer
 
-	for raftID := range consenters {
+	for _, raftID := range consenterIDs {
 		peers = append(peers, raft.Peer{ID: raftID})
 	}
 	return peers
@@ -155,38 +157,41 @@ func ConsentersToMap(consenters []*etcdraft.Consenter) map[string]struct{} {
 
 // MembershipByCert convert consenters map into set encapsulated by map
 // where key is client TLS certificate
-func MembershipByCert(consenters map[uint64]*etcdraft.Consenter) map[string]struct{} {
-	set := map[string]struct{}{}
-	for _, c := range consenters {
-		set[string(c.ClientTlsCert)] = struct{}{}
+func MembershipByCert(consenters map[uint64]*etcdraft.Consenter) map[string]uint64 {
+	set := map[string]uint64{}
+	for nodeID, c := range consenters {
+		set[string(c.ClientTlsCert)] = nodeID
 	}
 	return set
 }
 
 // ComputeMembershipChanges computes membership update based on information about new conseters, returns
 // two slices: a slice of added consenters and a slice of consenters to be removed
-func ComputeMembershipChanges(oldMetadata *etcdraft.BlockMetadata, newConsenters []*etcdraft.Consenter) (*MembershipChanges, error) {
+func ComputeMembershipChanges(oldMetadata *etcdraft.BlockMetadata, oldConsenters map[uint64]*etcdraft.Consenter, newConsenters []*etcdraft.Consenter) (mc *MembershipChanges, err error) {
 	result := &MembershipChanges{
+		NewConsenters:    map[uint64]*etcdraft.Consenter{},
 		NewBlockMetadata: proto.Clone(oldMetadata).(*etcdraft.BlockMetadata),
 		AddedNodes:       []*etcdraft.Consenter{},
 		RemovedNodes:     []*etcdraft.Consenter{},
 	}
 
-	if result.NewBlockMetadata.Consenters == nil {
-		// proto.Clone copies empty maps as nil
-		result.NewBlockMetadata.Consenters = map[uint64]*etcdraft.Consenter{}
-	}
+	result.NewBlockMetadata.ConsenterIds = make([]uint64, len(newConsenters))
 
-	currentConsentersSet := MembershipByCert(oldMetadata.Consenters)
-	for _, c := range newConsenters {
-		if _, exists := currentConsentersSet[string(c.ClientTlsCert)]; !exists {
-			result.AddedNodes = append(result.AddedNodes, c)
+	var addedNodeIndex int
+	currentConsentersSet := MembershipByCert(oldConsenters)
+	for i, c := range newConsenters {
+		if nodeID, exists := currentConsentersSet[string(c.ClientTlsCert)]; exists {
+			result.NewBlockMetadata.ConsenterIds[i] = nodeID
+			result.NewConsenters[nodeID] = c
+			continue
 		}
+		addedNodeIndex = i
+		result.AddedNodes = append(result.AddedNodes, c)
 	}
 
 	var deletedNodeID uint64
 	newConsentersSet := ConsentersToMap(newConsenters)
-	for nodeID, c := range oldMetadata.Consenters {
+	for nodeID, c := range oldConsenters {
 		if _, exists := newConsentersSet[string(c.ClientTlsCert)]; !exists {
 			result.RemovedNodes = append(result.RemovedNodes, c)
 			deletedNodeID = nodeID
@@ -197,11 +202,13 @@ func ComputeMembershipChanges(oldMetadata *etcdraft.BlockMetadata, newConsenters
 	case len(result.AddedNodes) == 1 && len(result.RemovedNodes) == 1:
 		// cert rotation
 		result.RotatedNode = deletedNodeID
-		result.NewBlockMetadata.Consenters[deletedNodeID] = result.AddedNodes[0]
+		result.NewBlockMetadata.ConsenterIds[addedNodeIndex] = deletedNodeID
+		result.NewConsenters[deletedNodeID] = result.AddedNodes[0]
 	case len(result.AddedNodes) == 1 && len(result.RemovedNodes) == 0:
 		// new node
 		nodeID := result.NewBlockMetadata.NextConsenterId
-		result.NewBlockMetadata.Consenters[nodeID] = result.AddedNodes[0]
+		result.NewConsenters[nodeID] = result.AddedNodes[0]
+		result.NewBlockMetadata.ConsenterIds[addedNodeIndex] = nodeID
 		result.NewBlockMetadata.NextConsenterId++
 		result.ConfChange = &raftpb.ConfChange{
 			NodeID: nodeID,
@@ -214,7 +221,7 @@ func ComputeMembershipChanges(oldMetadata *etcdraft.BlockMetadata, newConsenters
 			Type:   raftpb.ConfChangeRemoveNode,
 			NodeID: nodeID,
 		}
-		delete(result.NewBlockMetadata.Consenters, nodeID)
+		delete(result.NewConsenters, nodeID)
 	case len(result.AddedNodes) == 0 && len(result.RemovedNodes) == 0:
 		// no change
 	default:
@@ -272,9 +279,25 @@ func MetadataFromConfigValue(configValue *common.ConfigValue) (*etcdraft.ConfigM
 
 // MetadataFromConfigUpdate extracts consensus metadata from config update
 func MetadataFromConfigUpdate(update *common.ConfigUpdate) (*etcdraft.ConfigMetadata, error) {
-	if ordererConfigGroup, ok := update.WriteSet.Groups["Orderer"]; ok {
-		if val, ok := ordererConfigGroup.Values["ConsensusType"]; ok {
-			return MetadataFromConfigValue(val)
+	var baseVersion uint64
+	if update.ReadSet != nil && update.ReadSet.Groups != nil {
+		if ordererConfigGroup, ok := update.ReadSet.Groups["Orderer"]; ok {
+			if val, ok := ordererConfigGroup.Values["ConsensusType"]; ok {
+				baseVersion = val.Version
+			}
+		}
+	}
+
+	if update.WriteSet != nil && update.WriteSet.Groups != nil {
+		if ordererConfigGroup, ok := update.WriteSet.Groups["Orderer"]; ok {
+			if val, ok := ordererConfigGroup.Values["ConsensusType"]; ok {
+				if baseVersion == val.Version {
+					// Only if the version in the write set differs from the read-set
+					// should we consider this to be an update to the consensus type
+					return nil, nil
+				}
+				return MetadataFromConfigValue(val)
+			}
 		}
 	}
 	return nil, nil
@@ -360,6 +383,68 @@ func ConsensusMetadataFromConfigBlock(block *common.Block) (*etcdraft.ConfigMeta
 	return MetadataFromConfigUpdate(configUpdate)
 }
 
+// CheckConfigMetadata validates Raft config metadata
+func CheckConfigMetadata(metadata *etcdraft.ConfigMetadata) error {
+	if metadata == nil {
+		// defensive check. this should not happen as CheckConfigMetadata
+		// should always be called with non-nil config metadata
+		return errors.Errorf("nil Raft config metadata")
+	}
+
+	if metadata.Options.HeartbeatTick == 0 ||
+		metadata.Options.ElectionTick == 0 ||
+		metadata.Options.MaxInflightBlocks == 0 {
+		// if SnapshotIntervalSize is zero, DefaultSnapshotIntervalSize is used
+		return errors.Errorf("none of HeartbeatTick (%d), ElectionTick (%d) and MaxInflightBlocks (%d) can be zero",
+			metadata.Options.HeartbeatTick, metadata.Options.ElectionTick, metadata.Options.MaxInflightBlocks)
+	}
+
+	// check Raft options
+	if metadata.Options.ElectionTick <= metadata.Options.HeartbeatTick {
+		return errors.Errorf("ElectionTick (%d) must be greater than HeartbeatTick (%d)",
+			metadata.Options.HeartbeatTick, metadata.Options.HeartbeatTick)
+	}
+
+	if d, err := time.ParseDuration(metadata.Options.TickInterval); err != nil {
+		return errors.Errorf("failed to parse TickInterval (%s) to time duration: %s", metadata.Options.TickInterval, err)
+	} else if d == 0 {
+		return errors.Errorf("TickInterval cannot be zero")
+	}
+
+	if len(metadata.Consenters) == 0 {
+		return errors.Errorf("empty consenter set")
+	}
+
+	// sanity check of certificates
+	for _, consenter := range metadata.Consenters {
+		if err := validateCert(consenter.ServerTlsCert, "server"); err != nil {
+			return err
+		}
+		if err := validateCert(consenter.ClientTlsCert, "client"); err != nil {
+			return err
+		}
+	}
+
+	if err := MetadataHasDuplication(metadata); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateCert(pemData []byte, certRole string) error {
+	bl, _ := pem.Decode(pemData)
+
+	if bl == nil {
+		return errors.Errorf("%s TLS certificate is not PEM encoded: %s", certRole, string(pemData))
+	}
+
+	if _, err := x509.ParseCertificate(bl.Bytes); err != nil {
+		return errors.Errorf("%s TLS certificate has invalid ASN1 structure, %v: %s", certRole, err, string(pemData))
+	}
+	return nil
+}
+
 // ConsenterCertificate denotes a TLS certificate of a consenter
 type ConsenterCertificate []byte
 
@@ -395,16 +480,6 @@ func (conCert ConsenterCertificate) IsConsenterOfChannel(configBlock *common.Blo
 	return cluster.ErrNotInChannel
 }
 
-// SliceOfConsentersIDs converts maps of consenters into slice of consenters ids
-func SliceOfConsentersIDs(consenters map[uint64]*etcdraft.Consenter) []uint64 {
-	result := make([]uint64, 0)
-	for id := range consenters {
-		result = append(result, id)
-	}
-
-	return result
-}
-
 // NodeExists returns trues if node id exists in the slice
 // and false otherwise
 func NodeExists(id uint64, nodes []uint64) bool {
@@ -416,16 +491,16 @@ func NodeExists(id uint64, nodes []uint64) bool {
 	return false
 }
 
-// ConfChange computes Raft configuration changes based on current Raft configuration state and
-// consenters mapping stored in RaftMetadata
-func ConfChange(raftMetadata *etcdraft.BlockMetadata, confState *raftpb.ConfState) *raftpb.ConfChange {
+// ConfChange computes Raft configuration changes based on current Raft
+// configuration state and consenters IDs stored in RaftMetadata.
+func ConfChange(blockMetadata *etcdraft.BlockMetadata, confState *raftpb.ConfState) *raftpb.ConfChange {
 	raftConfChange := &raftpb.ConfChange{}
 
 	// need to compute conf changes to propose
-	if len(confState.Nodes) < len(raftMetadata.Consenters) {
+	if len(confState.Nodes) < len(blockMetadata.ConsenterIds) {
 		// adding new node
 		raftConfChange.Type = raftpb.ConfChangeAddNode
-		for consenterID := range raftMetadata.Consenters {
+		for _, consenterID := range blockMetadata.ConsenterIds {
 			if NodeExists(consenterID, confState.Nodes) {
 				continue
 			}
@@ -434,9 +509,8 @@ func ConfChange(raftMetadata *etcdraft.BlockMetadata, confState *raftpb.ConfStat
 	} else {
 		// removing node
 		raftConfChange.Type = raftpb.ConfChangeRemoveNode
-		consentersIDs := SliceOfConsentersIDs(raftMetadata.Consenters)
 		for _, nodeID := range confState.Nodes {
-			if NodeExists(nodeID, consentersIDs) {
+			if NodeExists(nodeID, blockMetadata.ConsenterIds) {
 				continue
 			}
 			raftConfChange.NodeID = nodeID
@@ -542,7 +616,7 @@ func (es *evictionSuspector) confirmSuspicion(cumulativeSuspicion time.Duration)
 		return
 	}
 
-	es.logger.Infof("Last config block was found to be block %d", lastConfigBlock.Header.Number)
+	es.logger.Infof("Last config block was found to be block [%d]", lastConfigBlock.Header.Number)
 
 	height := es.height()
 
@@ -563,7 +637,7 @@ func (es *evictionSuspector) confirmSuspicion(cumulativeSuspicion time.Duration)
 		return
 	}
 
-	es.logger.Warningf("Detected our own eviction from the chain in block %d", lastConfigBlock.Header.Number)
+	es.logger.Warningf("Detected our own eviction from the channel in block [%d]", lastConfigBlock.Header.Number)
 
 	es.logger.Infof("Waiting for chain to halt")
 	es.halt()
@@ -573,11 +647,11 @@ func (es *evictionSuspector) confirmSuspicion(cumulativeSuspicion time.Duration)
 	nextBlock := height
 	es.logger.Infof("Will now pull blocks %d to %d", nextBlock, lastConfigBlock.Header.Number)
 	for seq := nextBlock; seq <= lastConfigBlock.Header.Number; seq++ {
-		es.logger.Infof("Pulling block %d", seq)
+		es.logger.Infof("Pulling block [%d]", seq)
 		block := puller.PullBlock(seq)
 		err := es.writeBlock(block)
 		if err != nil {
-			es.logger.Panicf("Failed writing block %d to the ledger: %v", block.Header.Number, err)
+			es.logger.Panicf("Failed writing block [%d] to the ledger: %v", block.Header.Number, err)
 		}
 	}
 

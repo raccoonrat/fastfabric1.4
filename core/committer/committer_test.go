@@ -8,6 +8,7 @@ package committer
 
 import (
 	"errors"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"sync/atomic"
 	"testing"
 
@@ -185,7 +186,7 @@ func TestNewLedgerCommitterReactive(t *testing.T) {
 	_, ledger := createLedger(chainID)
 	ledger.On("CommitWithPvtData", mock.Anything).Return(nil)
 	var configArrived int32
-	committer := NewLedgerCommitterReactive(ledger, func(_ *common.Block) error {
+	committer := NewLedgerCommitterReactive(ledger, func(_ *cached.Block) error {
 		atomic.AddInt32(&configArrived, 1)
 		return nil
 	})
@@ -195,7 +196,7 @@ func TestNewLedgerCommitterReactive(t *testing.T) {
 	assert.NoError(t, err)
 
 	profile := configtxgentest.Load(localconfig.SampleSingleMSPSoloProfile)
-	block := encoder.New(profile).GenesisBlockForChannel(chainID)
+	block := cached.GetBlock(encoder.New(profile).GenesisBlockForChannel(chainID))
 	txsFilter := cut.NewTxValidationFlagsSetValue(len(block.Data.Data), peer.TxValidationCode_VALID)
 	block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = txsFilter
 
@@ -212,7 +213,7 @@ func TestNewLedgerCommitterReactiveFailedConfigUpdate(t *testing.T) {
 	_, ledger := createLedger(chainID)
 	ledger.On("CommitWithPvtData", mock.Anything).Return(nil)
 	var configArrived int32
-	committer := NewLedgerCommitterReactive(ledger, func(_ *common.Block) error {
+	committer := NewLedgerCommitterReactive(ledger, func(_ *cached.Block) error {
 		return errors.New("failed update config")
 	})
 
@@ -221,7 +222,7 @@ func TestNewLedgerCommitterReactiveFailedConfigUpdate(t *testing.T) {
 	assert.NoError(t, err)
 
 	profile := configtxgentest.Load(localconfig.SampleSingleMSPSoloProfile)
-	block := encoder.New(profile).GenesisBlockForChannel(chainID)
+	block := cached.GetBlock(encoder.New(profile).GenesisBlockForChannel(chainID))
 
 	err = committer.CommitWithPvtData(&ledger2.BlockAndPvtData{
 		Block: block,

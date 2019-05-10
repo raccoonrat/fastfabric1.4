@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package historyleveldb
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"os"
 	"strconv"
 	"testing"
@@ -47,7 +48,7 @@ func TestSavepoint(t *testing.T) {
 	assert.Equal(t, uint64(0), blockNum)
 
 	bg, gb := testutil.NewBlockGenerator(t, "testLedger", false)
-	assert.NoError(t, env.testHistoryDB.Commit(gb))
+	assert.NoError(t, env.testHistoryDB.Commit(cached.GetBlock(gb)))
 	// read the savepoint, it should now exist and return a Height object with BlockNum 0
 	savepoint, err = env.testHistoryDB.GetLastSavepoint()
 	assert.NoError(t, err, "Error upon historyDatabase.GetLastSavepoint()")
@@ -104,8 +105,8 @@ func TestHistory(t *testing.T) {
 	defer store1.Shutdown()
 
 	bg, gb := testutil.NewBlockGenerator(t, ledger1id, false)
-	assert.NoError(t, store1.AddBlock(gb))
-	assert.NoError(t, env.testHistoryDB.Commit(gb))
+	assert.NoError(t, store1.AddBlock(cached.GetBlock(gb)))
+	assert.NoError(t, env.testHistoryDB.Commit(cached.GetBlock(gb)))
 
 	//block1
 	txid := util2.GenerateUUID()
@@ -203,8 +204,8 @@ func TestHistoryForInvalidTran(t *testing.T) {
 	defer store1.Shutdown()
 
 	bg, gb := testutil.NewBlockGenerator(t, ledger1id, false)
-	assert.NoError(t, store1.AddBlock(gb))
-	assert.NoError(t, env.testHistoryDB.Commit(gb))
+	assert.NoError(t, store1.AddBlock(cached.GetBlock(gb)))
+	assert.NoError(t, env.testHistoryDB.Commit(cached.GetBlock(gb)))
 
 	//block1
 	txid := util2.GenerateUUID()
@@ -256,7 +257,7 @@ func TestGenesisBlockNoError(t *testing.T) {
 	defer env.cleanup()
 	block, err := configtxtest.MakeGenesisBlock("test_chainid")
 	assert.NoError(t, err)
-	err = env.testHistoryDB.Commit(block)
+	err = env.testHistoryDB.Commit(cached.GetBlock(block))
 	assert.NoError(t, err)
 }
 
@@ -272,8 +273,8 @@ func TestHistoryWithKeyContainingNilBytes(t *testing.T) {
 	defer store1.Shutdown()
 
 	bg, gb := testutil.NewBlockGenerator(t, ledger1id, false)
-	assert.NoError(t, store1.AddBlock(gb))
-	assert.NoError(t, env.testHistoryDB.Commit(gb))
+	assert.NoError(t, store1.AddBlock(cached.GetBlock(gb)))
+	assert.NoError(t, env.testHistoryDB.Commit(cached.GetBlock(gb)))
 
 	//block1
 	txid := util2.GenerateUUID()

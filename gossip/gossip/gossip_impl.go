@@ -9,6 +9,7 @@ package gossip
 import (
 	"bytes"
 	"fmt"
+	"net"
 	"reflect"
 	"sync"
 	"sync/atomic"
@@ -20,10 +21,12 @@ import (
 	"github.com/hyperledger/fabric/gossip/common"
 	"github.com/hyperledger/fabric/gossip/discovery"
 	"github.com/hyperledger/fabric/gossip/filter"
+	"github.com/hyperledger/fabric/gossip/gossip/algo"
 	"github.com/hyperledger/fabric/gossip/gossip/channel"
 	"github.com/hyperledger/fabric/gossip/gossip/msgstore"
 	"github.com/hyperledger/fabric/gossip/gossip/pull"
 	"github.com/hyperledger/fabric/gossip/identity"
+	"github.com/hyperledger/fabric/gossip/metrics"
 	"github.com/hyperledger/fabric/gossip/util"
 	proto "github.com/hyperledger/fabric/protos/gossip"
 	"github.com/pkg/errors"
@@ -61,12 +64,13 @@ type gossipServiceImpl struct {
 	mcs               api.MessageCryptoService
 	stateInfoMsgStore msgstore.MessageStore
 	certPuller        pull.Mediator
+	gossipMetrics     *metrics.GossipMetrics
 }
 
 // NewGossipService creates a gossip instance attached to a gRPC server
 func NewGossipService(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 	mcs api.MessageCryptoService, selfIdentity api.PeerIdentityType,
-	secureDialOpts api.PeerSecureDialOpts) Gossip {
+	secureDialOpts api.PeerSecureDialOpts, gossipMetrics *metrics.GossipMetrics) Gossip {
 	var err error
 
 	lgr := util.GetLogger(util.GossipLogger, conf.ID)
@@ -85,6 +89,7 @@ func NewGossipService(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 		stopFlag:              int32(0),
 		stopSignal:            &sync.WaitGroup{},
 		includeIdentityPeriod: time.Now().Add(conf.PublishCertPeriod),
+		gossipMetrics:         gossipMetrics,
 	}
 	g.stateInfoMsgStore = g.newStateInfoMsgStore()
 
@@ -93,11 +98,14 @@ func NewGossipService(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 		g.certPuller.Remove(string(pkiID))
 	}, sa)
 
-	if s == nil {
-		g.comm, err = createCommWithServer(conf.BindPort, g.idMapper, selfIdentity, secureDialOpts, sa)
-	} else {
-		g.comm, err = createCommWithoutServer(s, conf.TLSCerts, g.idMapper, selfIdentity, secureDialOpts, sa)
+	commConfig := comm.CommConfig{
+		DialTimeout:  conf.DialTimeout,
+		ConnTimeout:  conf.ConnTimeout,
+		RecvBuffSize: conf.RecvBuffSize,
+		SendBuffSize: conf.SendBuffSize,
 	}
+	g.comm, err = comm.NewCommInstance(s, conf.TLSCerts, g.idMapper, selfIdentity, secureDialOpts, sa,
+		gossipMetrics.CommMetrics, commConfig)
 
 	if err != nil {
 		lgr.Error("Failed instntiating communication layer:", err)
@@ -111,7 +119,15 @@ func NewGossipService(conf *Config, s *grpc.Server, sa api.SecurityAdvisor,
 
 	g.discAdapter = g.newDiscoveryAdapter()
 	g.disSecAdap = g.newDiscoverySecurityAdapter()
-	g.disc = discovery.NewDiscoveryService(g.selfNetworkMember(), g.discAdapter, g.disSecAdap, g.disclosurePolicy)
+
+	discoveryConfig := discovery.DiscoveryConfig{
+		AliveTimeInterval:            conf.AliveTimeInterval,
+		AliveExpirationTimeout:       conf.AliveExpirationTimeout,
+		AliveExpirationCheckInterval: conf.AliveExpirationCheckInterval,
+		ReconnectInterval:            conf.ReconnectInterval,
+	}
+	g.disc = discovery.NewDiscoveryService(g.selfNetworkMember(), g.discAdapter, g.disSecAdap, g.disclosurePolicy,
+		discoveryConfig)
 	g.logger.Infof("Creating gossip service with self membership of %s", g.selfNetworkMember())
 
 	g.certPuller = g.createCertStorePuller()
@@ -160,29 +176,13 @@ func newChannelState(g *gossipServiceImpl) *channelState {
 	}
 }
 
-func createCommWithoutServer(s *grpc.Server, certs *common.TLSCertificates, idStore identity.Mapper,
-	identity api.PeerIdentityType, secureDialOpts api.PeerSecureDialOpts, sa api.SecurityAdvisor) (comm.Comm, error) {
-	return comm.NewCommInstance(s, certs, idStore, identity, secureDialOpts, sa)
-}
-
-// NewGossipServiceWithServer creates a new gossip instance with a gRPC server
-func NewGossipServiceWithServer(conf *Config, secAdvisor api.SecurityAdvisor, mcs api.MessageCryptoService,
-	identity api.PeerIdentityType, secureDialOpts api.PeerSecureDialOpts) Gossip {
-	return NewGossipService(conf, nil, secAdvisor, mcs, identity, secureDialOpts)
-}
-
-func createCommWithServer(port int, idStore identity.Mapper, identity api.PeerIdentityType,
-	secureDialOpts api.PeerSecureDialOpts, sa api.SecurityAdvisor) (comm.Comm, error) {
-	return comm.NewCommInstanceWithServer(port, idStore, identity, secureDialOpts, sa)
-}
-
 func (g *gossipServiceImpl) toDie() bool {
 	return atomic.LoadInt32(&g.stopFlag) == int32(1)
 }
 
 func (g *gossipServiceImpl) JoinChan(joinMsg api.JoinChannelMessage, chainID common.ChainID) {
 	// joinMsg is supposed to have been already verified
-	g.chanState.joinChannel(joinMsg, chainID)
+	g.chanState.joinChannel(joinMsg, chainID, g.gossipMetrics.MembershipMetrics)
 
 	g.logger.Info("Joining gossip network of channel", string(chainID), "with", len(joinMsg.Members()), "organizations")
 	for _, org := range joinMsg.Members() {
@@ -232,7 +232,7 @@ func (g *gossipServiceImpl) learnAnchorPeers(channel string, orgOfAnchorPeers ap
 			g.logger.Warning("Got invalid port (0), skipping connecting to anchor peer", ap)
 			continue
 		}
-		endpoint := fmt.Sprintf("%s:%d", ap.Host, ap.Port)
+		endpoint := net.JoinHostPort(ap.Host, fmt.Sprintf("%d", ap.Port))
 		// Skip connecting to self
 		if g.selfNetworkMember().Endpoint == endpoint || g.selfNetworkMember().InternalEndpoint == endpoint {
 			g.logger.Info("Anchor peer with same endpoint, skipping connecting to myself")
@@ -1084,6 +1084,11 @@ func (g *gossipServiceImpl) createCertStorePuller() pull.Mediator {
 		PeerCountToSelect: g.conf.PullPeerNum,
 		PullInterval:      g.conf.PullInterval,
 		Tag:               proto.GossipMessage_EMPTY,
+		PullEngineConfig: algo.PullEngineConfig{
+			DigestWaitTime:   g.conf.DigestWaitTime,
+			RequestWaitTime:  g.conf.RequestWaitTime,
+			ResponseWaitTime: g.conf.ResponseWaitTime,
+		},
 	}
 	pkiIDFromMsg := func(msg *proto.SignedGossipMessage) string {
 		identityMsg := msg.GetPeerIdentity()

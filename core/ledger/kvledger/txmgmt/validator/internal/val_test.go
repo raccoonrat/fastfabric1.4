@@ -7,10 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 package internal
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 	"github.com/stretchr/testify/assert"
@@ -27,9 +27,9 @@ func TestNewPubAndHashUpdates(t *testing.T) {
 }
 
 func TestContainsPvtWrites_ReturnsTrue(t *testing.T) {
-	chrs1 := &rwsetutil.CollHashedRwSet{PvtRwSetHash: []byte{0}}
-	nrs1 := &rwsetutil.NsRwSet{CollHashedRwSets: []*rwsetutil.CollHashedRwSet{chrs1}}
-	trs1 := &rwsetutil.TxRwSet{NsRwSets: []*rwsetutil.NsRwSet{nrs1}}
+	chrs1 := &cached.CollHashedRwSet{PvtRwSetHash: []byte{0}}
+	nrs1 := &cached.NsRwSet{CollHashedRwSets: []*cached.CollHashedRwSet{chrs1}}
+	trs1 := &cached.TxRwSet{NsRwSets: []*cached.NsRwSet{nrs1}}
 	tx1 := &Transaction{RWSet: trs1}
 
 	ret1 := tx1.ContainsPvtWrites()
@@ -37,8 +37,8 @@ func TestContainsPvtWrites_ReturnsTrue(t *testing.T) {
 }
 
 func TestContainsPvtWrites_ReturnsFalse(t *testing.T) {
-	nrs2 := &rwsetutil.NsRwSet{CollHashedRwSets: []*rwsetutil.CollHashedRwSet{}}
-	trs2 := &rwsetutil.TxRwSet{NsRwSets: []*rwsetutil.NsRwSet{nrs2}}
+	nrs2 := &cached.NsRwSet{CollHashedRwSets: []*cached.CollHashedRwSet{}}
+	trs2 := &cached.TxRwSet{NsRwSets: []*cached.NsRwSet{nrs2}}
 	tx2 := &Transaction{RWSet: trs2}
 
 	ret2 := tx2.ContainsPvtWrites()
@@ -49,13 +49,13 @@ func TestRetrieveHash(t *testing.T) {
 	expected := []byte{0xde, 0xad, 0xbe, 0xef}
 	coll1 := "coll1"
 	ns1 := "ns1"
-	chrs1 := &rwsetutil.CollHashedRwSet{
+	chrs1 := &cached.CollHashedRwSet{
 		CollectionName: coll1,
 		PvtRwSetHash:   expected}
-	nrs1 := &rwsetutil.NsRwSet{
+	nrs1 := &cached.NsRwSet{
 		NameSpace:        ns1,
-		CollHashedRwSets: []*rwsetutil.CollHashedRwSet{chrs1}}
-	trs1 := &rwsetutil.TxRwSet{NsRwSets: []*rwsetutil.NsRwSet{nrs1}}
+		CollHashedRwSets: []*cached.CollHashedRwSet{chrs1}}
+	trs1 := &cached.TxRwSet{NsRwSets: []*cached.NsRwSet{nrs1}}
 	tx1 := &Transaction{RWSet: trs1}
 
 	actual := tx1.RetrieveHash(ns1, coll1)
@@ -74,10 +74,10 @@ func TestRetrieveHash_RWSetIsNil(t *testing.T) {
 func TestRetrieveHash_NsRwSetsNotEqualsToNs(t *testing.T) {
 	coll3 := "coll3"
 	ns3 := "ns3"
-	nrs3 := &rwsetutil.NsRwSet{
+	nrs3 := &cached.NsRwSet{
 		NameSpace:        "ns",
-		CollHashedRwSets: []*rwsetutil.CollHashedRwSet{}}
-	trs3 := &rwsetutil.TxRwSet{NsRwSets: []*rwsetutil.NsRwSet{nrs3}}
+		CollHashedRwSets: []*cached.CollHashedRwSet{}}
+	trs3 := &cached.TxRwSet{NsRwSets: []*cached.NsRwSet{nrs3}}
 	tx3 := &Transaction{RWSet: trs3}
 
 	ret3 := tx3.RetrieveHash(ns3, coll3)
@@ -108,9 +108,9 @@ func TestApplyWriteSet(t *testing.T) {
 		{IsDelete: true, KeyHash: key3},
 		{IsDelete: false, KeyHash: key4, ValueHash: value4},
 	}}
-	chrs1 := &rwsetutil.CollHashedRwSet{HashedRwSet: hrws1, CollectionName: coll1}
-	nrs1 := &rwsetutil.NsRwSet{NameSpace: ns1, KvRwSet: krs1, CollHashedRwSets: []*rwsetutil.CollHashedRwSet{chrs1}}
-	txRWSet1 := &rwsetutil.TxRwSet{NsRwSets: []*rwsetutil.NsRwSet{nrs1}}
+	chrs1 := &cached.CollHashedRwSet{HashedRwSet: hrws1, CollectionName: coll1}
+	nrs1 := &cached.NsRwSet{NameSpace: ns1, KvRwSet: krs1, CollHashedRwSets: []*cached.CollHashedRwSet{chrs1}}
+	txRWSet1 := &cached.TxRwSet{NsRwSets: []*cached.NsRwSet{nrs1}}
 
 	// Set expected state
 	expected := NewPubAndHashUpdates()

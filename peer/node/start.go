@@ -37,7 +37,7 @@ import (
 	"github.com/hyperledger/fabric/core/aclmgmt"
 	"github.com/hyperledger/fabric/core/aclmgmt/resources"
 	"github.com/hyperledger/fabric/core/admin"
-	"github.com/hyperledger/fabric/core/cclifecycle"
+	cc "github.com/hyperledger/fabric/core/cclifecycle"
 	"github.com/hyperledger/fabric/core/chaincode"
 	"github.com/hyperledger/fabric/core/chaincode/accesscontrol"
 	"github.com/hyperledger/fabric/core/chaincode/lifecycle"
@@ -59,7 +59,7 @@ import (
 	endorsement2 "github.com/hyperledger/fabric/core/handlers/endorsement/api"
 	endorsement3 "github.com/hyperledger/fabric/core/handlers/endorsement/api/identities"
 	"github.com/hyperledger/fabric/core/handlers/library"
-	"github.com/hyperledger/fabric/core/handlers/validation/api"
+	validation "github.com/hyperledger/fabric/core/handlers/validation/api"
 	"github.com/hyperledger/fabric/core/ledger/cceventmgmt"
 	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/core/operations"
@@ -334,7 +334,6 @@ func serve(args []string) error {
 	}
 	reg := library.InitRegistry(libConf)
 
-	validationPluginsByName := reg.Lookup(library.Validation).(map[string]validation.PluginFactory)
 	authFilters := reg.Lookup(library.Auth).([]authHandler.Filter)
 	endorserSupport := &endorser.SupportImpl{
 		SignerSupport:    signingIdentity,
@@ -345,6 +344,7 @@ func serve(args []string) error {
 		ACLProvider:      aclProvider,
 	}
 	endorsementPluginsByName := reg.Lookup(library.Endorsement).(map[string]endorsement2.PluginFactory)
+	validationPluginsByName := reg.Lookup(library.Validation).(map[string]validation.PluginFactory)
 	signingIdentityFetcher := (endorsement3.SigningIdentityFetcher)(endorserSupport)
 	channelStateRetriever := endorser.ChannelStateRetriever(endorserSupport)
 	pluginMapper := endorser.MapBasedPluginMapper(endorsementPluginsByName)
@@ -363,7 +363,7 @@ func serve(args []string) error {
 	policyMgr := peer.NewChannelPolicyManagerGetter()
 
 	// Initialize gossip component
-	err = initGossipService(policyMgr, peerServer, serializedIdentity, peerEndpoint.Address)
+	err = initGossipService(policyMgr, metricsProvider, peerServer, serializedIdentity, peerEndpoint.Address)
 	if err != nil {
 		return err
 	}
@@ -896,7 +896,8 @@ func secureDialOpts() []grpc.DialOption {
 // 2. Init the message crypto service;
 // 3. Init the security advisor;
 // 4. Init gossip related struct.
-func initGossipService(policyMgr policies.ChannelPolicyManagerGetter, peerServer *comm.GRPCServer, serializedIdentity []byte, peerAddr string) error {
+func initGossipService(policyMgr policies.ChannelPolicyManagerGetter, metricsProvider metrics.Provider,
+	peerServer *comm.GRPCServer, serializedIdentity []byte, peerAddr string) error {
 	var certs *gossipcommon.TLSCertificates
 	if peerServer.TLSEnabled() {
 		serverCert := peerServer.ServerCertificate()
@@ -919,6 +920,7 @@ func initGossipService(policyMgr policies.ChannelPolicyManagerGetter, peerServer
 
 	return service.InitGossipService(
 		serializedIdentity,
+		metricsProvider,
 		peerAddr,
 		peerServer.Server(),
 		certs,

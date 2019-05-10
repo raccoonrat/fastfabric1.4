@@ -7,6 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 package fsblkstorage
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"os"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestConstructCheckpointInfoFromBlockFiles(t *testing.T) {
 	bg, gb := testutil.NewBlockGenerator(t, ledgerid, false)
 
 	// Add a few blocks and verify that cpinfo derived from filesystem should be same as from the blockfile manager
-	blockfileMgr.addBlock(gb)
+	blockfileMgr.addBlock(cached.GetBlock(gb))
 	for _, blk := range bg.NextTestBlocks(3) {
 		blockfileMgr.addBlock(blk)
 	}
@@ -54,7 +55,7 @@ func TestConstructCheckpointInfoFromBlockFiles(t *testing.T) {
 
 	// Write a partial block (to simulate a crash) and verify that cpinfo derived from filesystem should be same as from the blockfile manager
 	lastTestBlk := bg.NextTestBlocks(1)[0]
-	blockBytes, _, err := serializeBlock(lastTestBlk)
+	blockBytes, _, err := serializeBlock(lastTestBlk.Block)
 	assert.NoError(t, err)
 	partialByte := append(proto.EncodeVarint(uint64(len(blockBytes))), blockBytes[len(blockBytes)/2:]...)
 	blockfileMgr.currentFileWriter.append(partialByte, true)

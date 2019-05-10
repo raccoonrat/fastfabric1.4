@@ -8,6 +8,7 @@ package valimpl
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"os"
 	"testing"
 
@@ -96,15 +97,15 @@ func TestValidateAndPreparePvtBatch(t *testing.T) {
 
 	// Construct the expected preprocessed block from preprocessProtoBlock()
 	expectedPerProcessedBlock := &internal.Block{Num: 10}
-	tx1TxRWSet, err := rwsetutil.TxRwSetFromProtoMsg(tx1SimulationResults.PubSimulationResults)
+	tx1TxRWSet, err := cached.TxRwSetFromProtoMsg(tx1SimulationResults.PubSimulationResults)
 	assert.NoError(t, err)
 	expectedPerProcessedBlock.Txs = append(expectedPerProcessedBlock.Txs, &internal.Transaction{IndexInBlock: 0, ID: "tx1", RWSet: tx1TxRWSet})
 
-	tx2TxRWSet, err := rwsetutil.TxRwSetFromProtoMsg(tx2SimulationResults.PubSimulationResults)
+	tx2TxRWSet, err := cached.TxRwSetFromProtoMsg(tx2SimulationResults.PubSimulationResults)
 	assert.NoError(t, err)
 	expectedPerProcessedBlock.Txs = append(expectedPerProcessedBlock.Txs, &internal.Transaction{IndexInBlock: 1, ID: "tx2", RWSet: tx2TxRWSet})
 
-	tx3TxRWSet, err := rwsetutil.TxRwSetFromProtoMsg(tx3SimulationResults.PubSimulationResults)
+	tx3TxRWSet, err := cached.TxRwSetFromProtoMsg(tx3SimulationResults.PubSimulationResults)
 	assert.NoError(t, err)
 	expectedPerProcessedBlock.Txs = append(expectedPerProcessedBlock.Txs, &internal.Transaction{IndexInBlock: 2, ID: "tx3", RWSet: tx3TxRWSet})
 	alwaysValidKVFunc := func(key string, value []byte) error {

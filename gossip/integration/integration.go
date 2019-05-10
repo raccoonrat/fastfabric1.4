@@ -12,8 +12,13 @@ import (
 	"time"
 
 	"github.com/hyperledger/fabric/gossip/api"
+	"github.com/hyperledger/fabric/gossip/comm"
 	"github.com/hyperledger/fabric/gossip/common"
+	"github.com/hyperledger/fabric/gossip/discovery"
+	"github.com/hyperledger/fabric/gossip/election"
 	"github.com/hyperledger/fabric/gossip/gossip"
+	"github.com/hyperledger/fabric/gossip/gossip/algo"
+	"github.com/hyperledger/fabric/gossip/metrics"
 	"github.com/hyperledger/fabric/gossip/util"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -53,7 +58,20 @@ func newConfig(selfEndpoint string, externalEndpoint string, certs *common.TLSCe
 		SkipBlockVerification:      viper.GetBool("peer.gossip.skipBlockVerification"),
 		TLSCerts:                   certs,
 		TimeForMembershipTracker:   util.GetDurationOrDefault("peer.gossip.membershipTrackerInterval", 5*time.Second),
+		DigestWaitTime:             util.GetDurationOrDefault("peer.gossip.digestWaitTime", algo.DefDigestWaitTime),
+		RequestWaitTime:            util.GetDurationOrDefault("peer.gossip.requestWaitTime", algo.DefRequestWaitTime),
+		ResponseWaitTime:           util.GetDurationOrDefault("peer.gossip.responseWaitTime", algo.DefResponseWaitTime),
+		DialTimeout:                util.GetDurationOrDefault("peer.gossip.dialTimeout", comm.DefDialTimeout),
+		ConnTimeout:                util.GetDurationOrDefault("peer.gossip.connTimeout", comm.DefConnTimeout),
+		RecvBuffSize:               util.GetIntOrDefault("peer.gossip.recvBuffSize", comm.DefRecvBuffSize),
+		SendBuffSize:               util.GetIntOrDefault("peer.gossip.sendBuffSize", comm.DefSendBuffSize),
+		MsgExpirationTimeout:       util.GetDurationOrDefault("peer.gossip.election.leaderAliveThreshold", election.DefLeaderAliveThreshold) * 10,
+		AliveTimeInterval:          util.GetDurationOrDefault("peer.gossip.aliveTimeInterval", discovery.DefAliveTimeInterval),
 	}
+
+	conf.AliveExpirationTimeout = util.GetDurationOrDefault("peer.gossip.aliveExpirationTimeout", 5*conf.AliveTimeInterval)
+	conf.AliveExpirationCheckInterval = conf.AliveExpirationTimeout / 10
+	conf.ReconnectInterval = util.GetDurationOrDefault("peer.gossip.reconnectInterval", conf.AliveExpirationTimeout)
 
 	return conf, nil
 }
@@ -61,7 +79,8 @@ func newConfig(selfEndpoint string, externalEndpoint string, certs *common.TLSCe
 // NewGossipComponent creates a gossip component that attaches itself to the given gRPC server
 func NewGossipComponent(peerIdentity []byte, endpoint string, s *grpc.Server,
 	secAdv api.SecurityAdvisor, cryptSvc api.MessageCryptoService,
-	secureDialOpts api.PeerSecureDialOpts, certs *common.TLSCertificates, bootPeers ...string) (gossip.Gossip, error) {
+	secureDialOpts api.PeerSecureDialOpts, certs *common.TLSCertificates, gossipMetrics *metrics.GossipMetrics,
+	bootPeers ...string) (gossip.Gossip, error) {
 
 	externalEndpoint := viper.GetString("peer.gossip.externalEndpoint")
 
@@ -70,7 +89,7 @@ func NewGossipComponent(peerIdentity []byte, endpoint string, s *grpc.Server,
 		return nil, errors.WithStack(err)
 	}
 	gossipInstance := gossip.NewGossipService(conf, s, secAdv, cryptSvc,
-		peerIdentity, secureDialOpts)
+		peerIdentity, secureDialOpts, gossipMetrics)
 
 	return gossipInstance, nil
 }

@@ -9,6 +9,7 @@ package fileledger
 import (
 	"errors"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -71,7 +72,7 @@ type mockBlockStore struct {
 	retrieveBlockByNumberError error
 }
 
-func (mbs *mockBlockStore) AddBlock(block *cb.Block) error {
+func (mbs *mockBlockStore) AddBlock(block *cached.Block) error {
 	return mbs.defaultError
 }
 

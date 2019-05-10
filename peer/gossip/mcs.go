@@ -104,6 +104,9 @@ func (s *MSPMessageCryptoService) GetPKIidOfCert(peerIdentity api.PeerIdentityTy
 	return digest
 }
 
+// VerifyBlock returns nil if the block is properly signed, and the claimed seqNum is the
+// sequence number that the block's header contains.
+// else returns error
 func (s *MSPMessageCryptoService) VerifyBlock(chainID common.ChainID, seqNum uint64,  block *cached.Block) error {
 	if block.Header == nil {
 		return fmt.Errorf("Invalid Block on channel [%s]. Header must be different from nil.", chainID)

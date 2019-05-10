@@ -17,6 +17,7 @@ limitations under the License.
 package fsblkstorage
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -72,12 +73,12 @@ func testBlockfileMgrCrashDuringWriting(t *testing.T, numBlocksBeforeCheckpoint 
 
 	// create all necessary blocks
 	totalBlocks := numBlocksBeforeCheckpoint + numBlocksAfterCheckpoint
-	allBlocks := []*common.Block{gb}
+	allBlocks := []*cached.Block{cached.GetBlock(gb)}
 	allBlocks = append(allBlocks, bg.NextTestBlocks(totalBlocks+1)...)
 
 	// identify the blocks that are to be added beforeCP, afterCP, and after restart
-	blocksBeforeCP := []*common.Block{}
-	blocksAfterCP := []*common.Block{}
+	blocksBeforeCP := []*cached.Block{}
+	blocksAfterCP := []*cached.Block{}
 	if numBlocksBeforeCheckpoint != 0 {
 		blocksBeforeCP = allBlocks[0:numBlocksBeforeCheckpoint]
 	}
@@ -132,7 +133,7 @@ func TestBlockfileMgrBlockIterator(t *testing.T) {
 }
 
 func testBlockfileMgrBlockIterator(t *testing.T, blockfileMgr *blockfileMgr,
-	firstBlockNum int, lastBlockNum int, expectedBlocks []*common.Block) {
+	firstBlockNum int, lastBlockNum int, expectedBlocks []*cached.Block) {
 	itr, err := blockfileMgr.retrieveBlocks(uint64(firstBlockNum))
 	defer itr.Close()
 	assert.NoError(t, err, "Error while getting blocks iterator")
@@ -194,7 +195,7 @@ func TestBlockfileMgrGetTxByIdDuplicateTxid(t *testing.T) {
 	assert.NoError(env.t, err)
 	blkFileMgr := blkStore.(*fsBlockStore).fileMgr
 	bg, gb := testutil.NewBlockGenerator(t, "testLedger", false)
-	assert.NoError(t, blkFileMgr.addBlock(gb))
+	assert.NoError(t, blkFileMgr.addBlock(cached.GetBlock(gb)))
 
 	block1 := bg.NextBlockWithTxid(
 		[][]byte{
@@ -294,7 +295,7 @@ func TestBlockfileMgrFileRolling(t *testing.T) {
 	blocks := testutil.ConstructTestBlocks(t, 200)
 	size := 0
 	for _, block := range blocks[:100] {
-		by, _, err := serializeBlock(block)
+		by, _, err := serializeBlock(block.Block)
 		assert.NoError(t, err, "Error while serializing block")
 		blockBytesSize := len(by)
 		encodedLen := proto.EncodeVarint(uint64(blockBytesSize))

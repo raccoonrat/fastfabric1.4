@@ -8,6 +8,7 @@ package internal
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -387,7 +388,7 @@ func TestTxOpsPreparationPvtdataHashes(t *testing.T) {
 
 func testutilBuildRwset(t *testing.T,
 	kvWrites map[compositeKey][]byte,
-	metadataWrites map[compositeKey]map[string][]byte) *rwsetutil.TxRwSet {
+	metadataWrites map[compositeKey]map[string][]byte) *cached.TxRwSet {
 	rwsetBuilder := rwsetutil.NewRWSetBuilder()
 	for kvwrite, val := range kvWrites {
 		if kvwrite.coll == "" {

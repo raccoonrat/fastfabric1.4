@@ -8,6 +8,7 @@ import (
 	"github.com/hyperledger/fabric/fastfabric-extensions/remote"
 	"github.com/hyperledger/fabric/fastfabric-extensions/stopwatch"
 	common2 "github.com/hyperledger/fabric/gossip/common"
+	"github.com/hyperledger/fabric/gossip/metrics"
 	"github.com/hyperledger/fabric/gossip/state"
 	"github.com/hyperledger/fabric/gossip/util"
 	"github.com/hyperledger/fabric/protos/common"
@@ -54,7 +55,7 @@ type GossipStateProviderImpl struct {
 	stopCh  chan struct{}
 }
 
-func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources) state.GossipStateProvider {
+func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources, stateMetrics *metrics.StateMetrics, config *state.Configuration) state.GossipStateProvider {
 	height, err := ledger.LedgerHeight()
 	if height == 0 {
 		// Panic here since this is an indication of invalid situation which should not happen in normal
@@ -70,7 +71,7 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 	}
 
 	gsp := &GossipStateProviderImpl{
-		GossipStateProvider: state.NewGossipStateProvider(chainID, services, ledger),
+		GossipStateProvider: state.NewGossipStateProvider(chainID, services, ledger, stateMetrics, config),
 		chainID:             chainID,
 		mediator:            services,
 		ledgerResources:     ledger,

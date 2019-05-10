@@ -17,6 +17,7 @@ limitations under the License.
 package fsblkstorage
 
 import (
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"io/ioutil"
 	"math"
 	"os"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
-	"github.com/hyperledger/fabric/protos/common"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -84,14 +84,14 @@ func newTestBlockfileWrapper(env *testEnv, ledgerid string) *testBlockfileMgrWra
 	return &testBlockfileMgrWrapper{env.t, blkStore.(*fsBlockStore).fileMgr}
 }
 
-func (w *testBlockfileMgrWrapper) addBlocks(blocks []*common.Block) {
+func (w *testBlockfileMgrWrapper) addBlocks(blocks []*cached.Block) {
 	for _, blk := range blocks {
 		err := w.blockfileMgr.addBlock(blk)
 		assert.NoError(w.t, err, "Error while adding block to blockfileMgr")
 	}
 }
 
-func (w *testBlockfileMgrWrapper) testGetBlockByHash(blocks []*common.Block) {
+func (w *testBlockfileMgrWrapper) testGetBlockByHash(blocks []*cached.Block) {
 	for i, block := range blocks {
 		hash := block.Header.Hash()
 		b, err := w.blockfileMgr.retrieveBlockByHash(hash)
@@ -100,7 +100,7 @@ func (w *testBlockfileMgrWrapper) testGetBlockByHash(blocks []*common.Block) {
 	}
 }
 
-func (w *testBlockfileMgrWrapper) testGetBlockByNumber(blocks []*common.Block, startingNum uint64) {
+func (w *testBlockfileMgrWrapper) testGetBlockByNumber(blocks []*cached.Block, startingNum uint64) {
 	for i := 0; i < len(blocks); i++ {
 		b, err := w.blockfileMgr.retrieveBlockByNumber(startingNum + uint64(i))
 		assert.NoError(w.t, err, "Error while retrieving [%d]th block from blockfileMgr", i)

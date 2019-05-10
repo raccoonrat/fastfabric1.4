@@ -9,6 +9,7 @@ package fsblkstorage
 import (
 	"bytes"
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -237,7 +238,7 @@ func (mgr *blockfileMgr) moveToNextFile() {
 	mgr.updateCheckpoint(cpInfo)
 }
 
-func (mgr *blockfileMgr) addBlock(block *common.Block) error {
+func (mgr *blockfileMgr) addBlock(block *cached.Block) error {
 	bcInfo := mgr.getBlockchainInfo()
 	if block.Header.Number != bcInfo.Height {
 		return errors.Errorf(
@@ -256,7 +257,7 @@ func (mgr *blockfileMgr) addBlock(block *common.Block) error {
 			bcInfo.CurrentBlockHash, block.Header.PreviousHash,
 		)
 	}
-	blockBytes, info, err := serializeBlock(block)
+	blockBytes, info, err := serializeBlock(block.Block)
 	if err != nil {
 		return errors.WithMessage(err, "error serializing block")
 	}
@@ -439,7 +440,7 @@ func (mgr *blockfileMgr) updateCheckpoint(cpInfo *checkpointInfo) {
 	mgr.cpInfoCond.Broadcast()
 }
 
-func (mgr *blockfileMgr) updateBlockchainInfo(latestBlockHash []byte, latestBlock *common.Block) {
+func (mgr *blockfileMgr) updateBlockchainInfo(latestBlockHash []byte, latestBlock *cached.Block) {
 	currentBCInfo := mgr.getBlockchainInfo()
 	newBCInfo := &common.BlockchainInfo{
 		Height:            currentBCInfo.Height + 1,

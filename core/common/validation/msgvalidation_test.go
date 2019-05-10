@@ -2,6 +2,7 @@ package validation
 
 import (
 	"fmt"
+	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
 	"testing"
 
 	"github.com/hyperledger/fabric/common/util"
@@ -76,7 +77,7 @@ func TestCheckSignatureFromCreator(t *testing.T) {
 	assert.NoError(t, err, "GetPayload returns err %s", err)
 
 	// validate the header
-	chdr, shdr, err := validateCommonHeader(payload.Header)
+	chdr, shdr, err := validateCommonHeader(&cached.Header{Header:payload.Header})
 	assert.NoError(t, err, "validateCommonHeader returns err %s", err)
 
 	// validate the signature in the envelope

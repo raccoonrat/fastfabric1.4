@@ -17,11 +17,12 @@ import (
 	"syscall"
 	"time"
 
-	docker "github.com/fsouza/go-dockerclient"
+	"github.com/fsouza/go-dockerclient"
 	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/integration/nwo"
 	"github.com/hyperledger/fabric/integration/nwo/commands"
 	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/msp"
 	"github.com/hyperledger/fabric/protos/orderer/etcdraft"
 	"github.com/hyperledger/fabric/protos/utils"
 	. "github.com/onsi/ginkgo"
@@ -191,9 +192,14 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 				Eventually(ordererProc.Ready()).Should(BeClosed())
 			}
 
+			By("Finding leader")
+			leader := findLeader(ordererRunners)
+			leaderIndex := leader - 1
+			blockSeq := 0
+
 			By("Checking that all orderers are online")
 			assertBlockReception(map[string]int{
-				"systemchannel": 0,
+				"systemchannel": blockSeq,
 			}, orderers, peer, network)
 
 			By("Preparing new certificates for the orderer nodes")
@@ -213,14 +219,33 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 
 					metadata.Consenters = newConsenters
 				})
+				blockSeq++
 			}
 
-			for i, rotation := range certificateRotations {
-				o := network.Orderers[i]
-				port := network.OrdererPort(o, nwo.ListenPort)
+			rotate := func(target int) {
+				// submit a config tx to rotate the cert of an orderer.
+				// The orderer being rotated is going to be unavailable
+				// eventually, therefore submitter of tx is different
+				// from the target, so the configuration can be reliably
+				// checked.
+				submitter := (target + 1) % 3
+				rotation := certificateRotations[target]
+				targetOrderer := network.Orderers[target]
+				remainder := func() []*nwo.Orderer {
+					var ret []*nwo.Orderer
+					for i, o := range network.Orderers {
+						if i == target {
+							continue
+						}
+						ret = append(ret, o)
+					}
+					return ret
+				}()
+				submitterOrderer := network.Orderers[submitter]
+				port := network.OrdererPort(targetOrderer, nwo.ListenPort)
 
-				fmt.Fprintf(GinkgoWriter, "Adding the future certificate of orderer node %d", i+1)
-				swap(o, rotation.oldCert, etcdraft.Consenter{
+				fmt.Fprintf(GinkgoWriter, "Rotating certificate of orderer node %d\n", target+1)
+				swap(submitterOrderer, rotation.oldCert, etcdraft.Consenter{
 					ServerTlsCert: rotation.newCert,
 					ClientTlsCert: rotation.newCert,
 					Host:          "127.0.0.1",
@@ -229,23 +254,55 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 
 				By("Waiting for all orderers to sync")
 				assertBlockReception(map[string]int{
-					"systemchannel": i + 1,
-				}, orderers, peer, network)
+					"systemchannel": blockSeq,
+				}, remainder, peer, network)
+
+				By("Waiting for rotated node to be unavailable")
+				c := commands.ChannelFetch{
+					ChannelID:  network.SystemChannel.Name,
+					Block:      "newest",
+					OutputFile: "/dev/null",
+					Orderer:    network.OrdererAddress(targetOrderer, nwo.ListenPort),
+				}
+				Eventually(func() string {
+					sess, err := network.OrdererAdminSession(targetOrderer, peer, c)
+					Expect(err).NotTo(HaveOccurred())
+					Eventually(sess, network.EventuallyTimeout).Should(gexec.Exit())
+					if sess.ExitCode() != 0 {
+						return fmt.Sprintf("exit code is %d: %s", sess.ExitCode(), string(sess.Err.Contents()))
+					}
+					sessErr := string(sess.Err.Contents())
+					expected := fmt.Sprintf("Received block: %d", blockSeq)
+					if strings.Contains(sessErr, expected) {
+						return ""
+					}
+					return sessErr
+				}, network.EventuallyTimeout, time.Second).ShouldNot(BeEmpty())
 
 				By("Killing the orderer")
-				ordererProcesses[i].Signal(syscall.SIGTERM)
-				Eventually(ordererProcesses[i].Wait(), network.EventuallyTimeout).Should(Receive())
+				ordererProcesses[target].Signal(syscall.SIGTERM)
+				Eventually(ordererProcesses[target].Wait(), network.EventuallyTimeout).Should(Receive())
 
 				By("Starting the orderer again")
-				ordererRunner := network.OrdererRunner(orderers[i])
+				ordererRunner := network.OrdererRunner(targetOrderer)
 				ordererRunners = append(ordererRunners, ordererRunner)
-				ordererProcesses[i] = ifrit.Invoke(grouper.Member{Name: orderers[i].ID(), Runner: ordererRunner})
-				Eventually(ordererProcesses[i].Ready()).Should(BeClosed())
+				ordererProcesses[target] = ifrit.Invoke(grouper.Member{Name: orderers[target].ID(), Runner: ordererRunner})
+				Eventually(ordererProcesses[target].Ready()).Should(BeClosed())
 
 				By("And waiting for it to stabilize")
 				assertBlockReception(map[string]int{
-					"systemchannel": i + 1,
+					"systemchannel": blockSeq,
 				}, orderers, peer, network)
+			}
+
+			By(fmt.Sprintf("Rotating cert on leader %d", leader))
+			rotate(leaderIndex)
+
+			By("Rotating certificates of other orderer nodes")
+			for i := range certificateRotations {
+				if i != leaderIndex {
+					rotate(i)
+				}
 			}
 
 		})
@@ -627,27 +684,56 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 			orderers := []*nwo.Orderer{o1, o2, o3}
 
 			By("Waiting for them to elect a leader")
-			evictedNode := findLeader(ordererRunners) - 1
+			firstEvictedNode := findLeader(ordererRunners) - 1
 
-			By("Removing the leader from system channel")
-			serverCertBytes, err := ioutil.ReadFile(filepath.Join(network.OrdererLocalTLSDir(network.Orderers[evictedNode]), "server.crt"))
+			By("Removing the leader from 3-node channel")
+			serverCertBytes, err := ioutil.ReadFile(filepath.Join(network.OrdererLocalTLSDir(orderers[firstEvictedNode]), "server.crt"))
 			Expect(err).To(Not(HaveOccurred()))
 
-			By("Removing the leader from both system channel and application channel")
-			nwo.RemoveConsenter(network, peer, network.Orderers[(evictedNode+1)%3], "systemchannel", serverCertBytes)
+			nwo.RemoveConsenter(network, peer, network.Orderers[(firstEvictedNode+1)%3], "systemchannel", serverCertBytes)
 			fmt.Fprintln(GinkgoWriter, "Ensuring the other orderers detect the eviction of the node on channel", "systemchannel")
-			Eventually(ordererRunners[(evictedNode+1)%3].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say("Deactivated node"))
-			Eventually(ordererRunners[(evictedNode+2)%3].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say("Deactivated node"))
+			Eventually(ordererRunners[(firstEvictedNode+1)%3].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say("Deactivated node"))
+			Eventually(ordererRunners[(firstEvictedNode+2)%3].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say("Deactivated node"))
 
 			fmt.Fprintln(GinkgoWriter, "Ensuring the evicted orderer stops rafting on channel", "systemchannel")
 			stopMSg := fmt.Sprintf("Raft node stopped channel=%s", "systemchannel")
-			Eventually(ordererRunners[evictedNode].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say(stopMSg))
+			Eventually(ordererRunners[firstEvictedNode].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say(stopMSg))
 
 			By("Ensuring the evicted orderer now doesn't serve clients")
-			ensureEvicted(orderers[evictedNode], peer, network, "systemchannel")
+			ensureEvicted(orderers[firstEvictedNode], peer, network, "systemchannel")
 
-			By("Ensuring that all orderers don't log errors to the log")
-			assertNoErrorsAreLogged(ordererRunners)
+			var survivedOrdererRunners []*ginkgomon.Runner
+			for i := range orderers {
+				if i == firstEvictedNode {
+					continue
+				}
+
+				survivedOrdererRunners = append(survivedOrdererRunners, ordererRunners[i])
+			}
+
+			secondEvictedNode := findLeader(survivedOrdererRunners) - 1
+
+			var surviver int
+			for i := range orderers {
+				if i != firstEvictedNode && i != secondEvictedNode {
+					surviver = i
+					break
+				}
+			}
+
+			By("Removing the leader from 2-node channel")
+			serverCertBytes, err = ioutil.ReadFile(filepath.Join(network.OrdererLocalTLSDir(orderers[secondEvictedNode]), "server.crt"))
+			Expect(err).To(Not(HaveOccurred()))
+
+			nwo.RemoveConsenter(network, peer, orderers[surviver], "systemchannel", serverCertBytes)
+			fmt.Fprintln(GinkgoWriter, "Ensuring the other orderer detect the eviction of the node on channel", "systemchannel")
+			Eventually(ordererRunners[secondEvictedNode].Err(), network.EventuallyTimeout, time.Second).Should(gbytes.Say(stopMSg))
+
+			By("Ensuring the evicted orderer now doesn't serve clients")
+			ensureEvicted(orderers[secondEvictedNode], peer, network, "systemchannel")
+
+			By("Asserting the only remaining node elects itself")
+			findLeader([]*ginkgomon.Runner{ordererRunners[surviver]})
 		})
 
 		It("notices it even if it is down at the time of its eviction", func() {
@@ -702,7 +788,7 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 			Eventually(ordererRunners[2].Err(), time.Minute, time.Second).Should(gbytes.Say("certificate extracted from TLS connection isn't authorized"))
 
 			By("Ensuring it detects its eviction")
-			evictionDetection := gbytes.Say("Detected our own eviction from the chain in block 1 channel=testchannel")
+			evictionDetection := gbytes.Say(`Detected our own eviction from the channel in block \[1\] channel=testchannel`)
 			Eventually(ordererRunner.Err(), time.Minute, time.Second).Should(evictionDetection)
 
 			By("Ensuring all blocks are pulled up to the block that evicts the OSN")
@@ -865,7 +951,7 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 				err := proto.Unmarshal(originalMetadata, metadata)
 				Expect(err).NotTo(HaveOccurred())
 
-				metadata.Options.SnapshotInterval = 2 * 1024 // 100 MB
+				metadata.Options.SnapshotIntervalSize = 2 * 1024 // 2 KB
 
 				// write metadata back
 				newMetadata, err := proto.Marshal(metadata)
@@ -954,6 +1040,58 @@ var _ = Describe("EndToEnd reconfiguration and onboarding", func() {
 		By("Creating another channel via the orderer that is in system channel but not app channel")
 		network.CreateChannel("three-orderer-channel", network.Orderers[2], peer)
 	})
+
+	It("can add a new orderer organization", func() {
+		network = nwo.New(nwo.MultiNodeEtcdRaft(), testDir, client, BasePort(), components)
+		o1, o2, o3 := network.Orderer("orderer1"), network.Orderer("orderer2"), network.Orderer("orderer3")
+		orderers := []*nwo.Orderer{o1, o2, o3}
+		peer = network.Peer("Org1", "peer1")
+
+		network.GenerateConfigTree()
+		network.Bootstrap()
+
+		By("Launching the orderers")
+		for _, o := range orderers {
+			runner := network.OrdererRunner(o)
+			ordererRunners = append(ordererRunners, runner)
+			process := ifrit.Invoke(runner)
+			ordererProcesses = append(ordererProcesses, process)
+		}
+
+		for _, ordererProc := range ordererProcesses {
+			Eventually(ordererProc.Ready()).Should(BeClosed())
+		}
+
+		By("Waiting for system channel to be ready")
+		findLeader(ordererRunners)
+
+		channel := "systemchannel"
+		config := nwo.GetConfig(network, peer, o1, channel)
+		updatedConfig := proto.Clone(config).(*common.Config)
+
+		ordererOrg := updatedConfig.ChannelGroup.Groups["Orderer"].Groups["OrdererOrg"]
+		mspConfig := &msp.MSPConfig{}
+		proto.Unmarshal(ordererOrg.Values["MSP"].Value, mspConfig)
+
+		fabMSPConfig := &msp.FabricMSPConfig{}
+		proto.Unmarshal(mspConfig.Config, fabMSPConfig)
+
+		fabMSPConfig.Name = "OrdererMSP2"
+
+		mspConfig.Config, _ = proto.Marshal(fabMSPConfig)
+		updatedConfig.ChannelGroup.Groups["Orderer"].Groups["OrdererMSP2"] = &common.ConfigGroup{
+			Values: map[string]*common.ConfigValue{
+				"MSP": {
+					Value:     utils.MarshalOrPanic(mspConfig),
+					ModPolicy: "Admins",
+				},
+			},
+			ModPolicy: "Admins",
+		}
+
+		nwo.UpdateOrdererConfig(network, o1, channel, config, updatedConfig, peer, o1)
+	})
+
 })
 
 func ensureEvicted(evictedOrderer *nwo.Orderer, submitter *nwo.Peer, network *nwo.Network, channel string) {
