@@ -1,0 +1,13 @@
+OrdererOrgs:
+- Name: Orderer
+  Domain: ORDERER_DOMAIN # change
+  Specs:
+    - Hostname: ORDERER_ADDRESS # change
+PeerOrgs:
+- Name: Org1
+  Domain: PEER_DOMAIN # change
+  EnableNodeOUs: true
+  Specs:
+    - Hostname: FAST_PEER_ADDRESS # change
+  Users:
+    Count: 1
