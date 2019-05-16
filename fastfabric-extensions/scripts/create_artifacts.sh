@@ -1,3 +1,4 @@
+export FABRIC_ROOT=$GOPATH/src/github.com/hyperledger/fabric
 export FABRIC_CFG_PATH=$FABRIC_ROOT/fastfabric-extensions/scripts
 if [ -d ./crypto-config ]; then rm -r ./crypto-config; fi
 if [ -d ./channel-artifacts ]; then rm -r ./channel-artifacts; fi
