@@ -1,4 +1,5 @@
 #!/bin/bash
+export FABRIC_ROOT=$GOPATH/src/github.com/hyperledger/fabric
 export FABRIC_CFG_PATH=$FABRIC_ROOT/fastfabric-extensions/scripts
 export CORE_PEER_LOCALMSPID=Org1MSP
 export ENDORSER_ADDRESS = "" # address of endorser
