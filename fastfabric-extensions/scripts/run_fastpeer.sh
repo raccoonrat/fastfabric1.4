@@ -14,6 +14,6 @@ export DOMAIN="" # peer domain as defined in crypto-config.yaml
 export CORE_PEER_MSPCONFIGPATH=$FABRIC_CFG_PATH/crypto-config/peerOrganizations/$DOMAIN/peers/$FAST_PEER_ADDRESS/msp
 rm /var/hyperledger/production/* -r # clean up data from previous runs
 (cd $FABRIC_ROOT/peer/ && go install)
-export STORAGE_ADDRESS= "" # address of the storage server
-export ENDORSER_ADDRESS= "" # address of endorser
+export STORAGE_ADDRESS="" # address of the storage server
+export ENDORSER_ADDRESS="" # address of endorser
 peer node start --storageAddr $STORAGE_ADDRESS:10000 --endorserAddr $ENDORSER_ADDRESS:10000 # could have multiple endorsers
