@@ -13,23 +13,23 @@ import (
 var KeyNotFound = errors.New("key not found")
 
 type DB struct {
-	db *ValueHashtable
+	db    *ValueHashtable
 	lvldb *leveldbhelper.DB
 }
 
-func createDB() (*DB){
-	db := &DB {db:NewHT()}
+func createDB() *DB {
+	db := &DB{db: NewHT()}
 	return db
 }
 
 func (ledger *DB) Open() {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		ledger.lvldb.Open()
 	}
 }
 
 func (ledger *DB) Close() error {
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		ledger.lvldb.Close()
 		return nil
 	}
@@ -38,7 +38,7 @@ func (ledger *DB) Close() error {
 }
 
 func (ledger *DB) Get(bytes []byte) ([]byte, error) {
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		return ledger.lvldb.Get(bytes)
 	}
 
@@ -49,58 +49,58 @@ func (ledger *DB) Get(bytes []byte) ([]byte, error) {
 	}
 }
 func (ledger *DB) Put(key []byte, value []byte, sync bool) error {
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		return ledger.lvldb.Put(key, value, sync)
 	}
 
 	return ledger.db.Put(key, value)
 }
 func (ledger *DB) Delete(key []byte, sync bool) error {
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		return ledger.lvldb.Delete(key, sync)
 	}
 
 	return ledger.db.Remove(key)
 }
 func (ledger *DB) GetIterator(sk []byte, ek []byte) iterator.Iterator {
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		return ledger.lvldb.GetIterator(sk, ek)
 	}
 
 	keys := ledger.db.getKeys(sk, ek)
-	itr := &Iterimpl{keys:keys, idx:-1, values:make(map[string][]byte)}
-	for _,key := range keys{
-		v, err :=ledger.db.Get(key)
+	itr := &Iterimpl{keys: keys, idx: -1, values: make(map[string][]byte)}
+	for _, key := range keys {
+		v, err := ledger.db.Get(key)
 		if err != nil {
 			itr.err = fmt.Errorf("Failed to get value for key %s: %s", key, err)
 			return itr
 		}
-		fmt.Println("iterator value for key", string(key),"-", string(v))
+		fmt.Println("iterator value for key", string(key), "-", string(v))
 		itr.values[string(retrieveAppKey(key))] = v
 	}
 	return itr
 }
 
 type Iterimpl struct {
-	keys [][]byte
-	idx  int
-	err  error
+	keys   [][]byte
+	idx    int
+	err    error
 	values map[string][]byte
 }
 
 func (i *Iterimpl) First() bool {
-	i.idx=0
+	i.idx = 0
 	return i.keys != nil
 }
 
 func (i *Iterimpl) Last() bool {
-	i.idx = len(i.keys)-1
+	i.idx = len(i.keys) - 1
 	return i.keys != nil
 }
 
 func (i *Iterimpl) Seek(key []byte) bool {
-	for tempidx := 0;tempidx< len(i.keys);tempidx++{
-		if bytes.Compare(key,i.keys[tempidx])>-1{
+	for tempidx := 0; tempidx < len(i.keys); tempidx++ {
+		if bytes.Compare(key, i.keys[tempidx]) > -1 {
 			i.idx = tempidx
 			return true
 		}
@@ -115,7 +115,7 @@ func (i *Iterimpl) Next() bool {
 
 func (i *Iterimpl) Prev() bool {
 	i.idx--
-	return i.idx >=0
+	return i.idx >= 0
 }
 
 func (Iterimpl) Release() {
@@ -127,7 +127,7 @@ func (Iterimpl) SetReleaser(releaser util.Releaser) {
 }
 
 func (i *Iterimpl) Valid() bool {
-	return i.idx >=0 && i.idx < len(i.keys)
+	return i.idx >= 0 && i.idx < len(i.keys)
 }
 
 func (i *Iterimpl) Error() error {
@@ -144,7 +144,6 @@ func (i *Iterimpl) Key() []byte {
 func retrieveAppKey(levelKey []byte) []byte {
 	return bytes.SplitN(levelKey, dbNameKeySep, 2)[1]
 }
-
 
 func (i *Iterimpl) Value() []byte {
 	if !i.Valid() {

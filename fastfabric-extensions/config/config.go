@@ -6,6 +6,6 @@ var IsStorage = false
 var IsEndorser = false
 var IsBenchmark = false
 
-var PeerAddress = "localhost:10000"
+var PeerAddress = ""
 var EndorserAddresses []string
-var StorageAddress = "localhost:10000"
+var StorageAddress = ""

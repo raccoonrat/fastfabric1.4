@@ -35,15 +35,15 @@ type Provider struct {
 	db        *DB
 	dbHandles map[string]*DBHandle
 	mux       sync.Mutex
-	lvlProv 	*leveldbhelper.Provider
+	lvlProv   *leveldbhelper.Provider
 }
 
 // NewProvider constructs a Provider
 func NewProvider(dbPath string) *Provider {
 	var p = &Provider{dbHandles: make(map[string]*DBHandle), mux: sync.Mutex{}}
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		p.lvlProv = leveldbhelper.NewProvider(&leveldbhelper.Conf{DBPath: dbPath})
-	} else{
+	} else {
 		p.db = createDB()
 	}
 
@@ -56,11 +56,11 @@ func (p *Provider) GetDBHandle(dbName string) *DBHandle {
 	defer p.mux.Unlock()
 
 	if p.dbHandles[dbName] == nil {
-		if config.IsStorage {
+		if config.StorageAddress == "" {
 			lvlHandle := p.lvlProv.GetDBHandle(dbName)
-			p.dbHandles[dbName] = &DBHandle{dbName:dbName, lvlHandle:lvlHandle}
+			p.dbHandles[dbName] = &DBHandle{dbName: dbName, lvlHandle: lvlHandle}
 		} else {
-			p.dbHandles[dbName] = &DBHandle{dbName:dbName, db:p.db}
+			p.dbHandles[dbName] = &DBHandle{dbName: dbName, db: p.db}
 		}
 	}
 
@@ -68,25 +68,25 @@ func (p *Provider) GetDBHandle(dbName string) *DBHandle {
 }
 
 func (p *Provider) Close() {
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		p.lvlProv.Close()
-	} else{
+	} else {
 		p.db.Close()
 	}
 }
 
 // DBHandle is an handle to a named db
 type DBHandle struct {
-	dbName string
-	db     *DB
-	lvlHandle * leveldbhelper.DBHandle
+	dbName    string
+	db        *DB
+	lvlHandle *leveldbhelper.DBHandle
 }
 
 // Get returns the value for the given key
 func (h *DBHandle) Get(key []byte) ([]byte, error) {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		return h.lvlHandle.Get(key)
-	}else {
+	} else {
 		val, err := h.db.Get(constructLevelKey(h.dbName, key))
 		if err == KeyNotFound {
 			return nil, nil
@@ -101,27 +101,27 @@ func (h *DBHandle) Get(key []byte) ([]byte, error) {
 
 // Put saves the key/value
 func (h *DBHandle) Put(key []byte, value []byte, sync bool) error {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		return h.lvlHandle.Put(key, value, sync)
-	}else {
+	} else {
 		return h.db.Put(constructLevelKey(h.dbName, key), value, sync)
 	}
 }
 
 // Delete deletes the given key
 func (h *DBHandle) Delete(key []byte, sync bool) error {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		return h.lvlHandle.Delete(key, sync)
-	}else {
+	} else {
 		return h.db.Delete(constructLevelKey(h.dbName, key), sync)
 	}
 }
 
 // WriteBatch writes a batch in an atomic way
 func (h *DBHandle) WriteBatch(batch *UpdateBatch, sync bool) error {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		return h.lvlHandle.WriteBatch(batch.lvlBatch, sync)
-	}else {
+	} else {
 		for k, v := range batch.KVs {
 			key := constructLevelKey(h.dbName, []byte(k))
 			if v == nil {
@@ -138,9 +138,9 @@ func (h *DBHandle) WriteBatch(batch *UpdateBatch, sync bool) error {
 // The resultset contains all the keys that are present in the db between the startKey (inclusive) and the endKey (exclusive).
 // A nil startKey represents the first available key and a nil endKey represent a logical key after the last available key
 func (h *DBHandle) GetIterator(startKey []byte, endKey []byte) *Iterator {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		return &Iterator{h.lvlHandle.GetIterator(startKey, endKey)}
-	}else {
+	} else {
 		sKey := constructLevelKey(h.dbName, startKey)
 		eKey := constructLevelKey(h.dbName, endKey)
 		if endKey == nil {
@@ -154,24 +154,24 @@ func (h *DBHandle) GetIterator(startKey []byte, endKey []byte) *Iterator {
 
 // UpdateBatch encloses the details of multiple `updates`
 type UpdateBatch struct {
-	KVs map[string][]byte
+	KVs      map[string][]byte
 	lvlBatch *leveldbhelper.UpdateBatch
 }
 
 // NewUpdateBatch constructs an instance of a Batch
 func NewUpdateBatch() *UpdateBatch {
-	if config.IsStorage{
-		return &UpdateBatch{lvlBatch:leveldbhelper.NewUpdateBatch()}
-	}else {
-		return &UpdateBatch{KVs:make(map[string][]byte)}
+	if config.StorageAddress == "" {
+		return &UpdateBatch{lvlBatch: leveldbhelper.NewUpdateBatch()}
+	} else {
+		return &UpdateBatch{KVs: make(map[string][]byte)}
 	}
 }
 
 // Put adds a KV
 func (batch *UpdateBatch) Put(key []byte, value []byte) {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		batch.lvlBatch.Put(key, value)
-	}else {
+	} else {
 		if value == nil {
 			panic("Nil value not allowed")
 		}
@@ -181,18 +181,18 @@ func (batch *UpdateBatch) Put(key []byte, value []byte) {
 
 // Delete deletes a Key and associated value
 func (batch *UpdateBatch) Delete(key []byte) {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		batch.lvlBatch.Delete(key)
-	}else {
+	} else {
 		batch.KVs[string(key)] = nil
 	}
 }
 
 // Len returns the number of entries in the batch
 func (batch *UpdateBatch) Len() int {
-	if config.IsStorage{
+	if config.StorageAddress == "" {
 		return batch.lvlBatch.Len()
-	}else {
+	} else {
 		return len(batch.KVs)
 	}
 }
@@ -204,4 +204,3 @@ type Iterator struct {
 func constructLevelKey(dbName string, key []byte) []byte {
 	return append(append([]byte(dbName), dbNameKeySep...), key...)
 }
-

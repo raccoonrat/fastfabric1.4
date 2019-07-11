@@ -111,14 +111,14 @@ func startCmd() *cobra.Command {
 	flags := nodeStartCmd.Flags()
 	flags.BoolVarP(&chaincodeDevMode, "peer-chaincodedev", "", false,
 		"Whether peer in chaincode development mode")
-	flags.BoolVarP(&ffconfig.IsStorage, "isStorage", "s", false, "Defines if this peer persist its storage")
-	flags.BoolVarP(&ffconfig.IsEndorser, "isEndorser", "e", false, "Defines if this peer is a decoupled endorser")
-	flags.StringSliceVar(&ffconfig.EndorserAddresses,"endorserAddr", []string{}, "Defines the addresses of the decoupled endorser servers")
-	flags.StringVar(&ffconfig.StorageAddress,"storageAddr", "", "Defines where the address of the decoupled persistent ledger stored")
-	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "", "The address this peer listens to for validated blocks" )
-	flags.BoolVarP(&ffconfig.IsBenchmark, "isBenchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag." )
-	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location." )
-	flags.StringVar(&cpuprofile,"cpuprofile", "", "write cpu profile to file")
+	flags.BoolVarP(&ffconfig.IsStorage, "isStorage", "s", false, "Defines if this node is a decoupled storage node")
+	flags.BoolVarP(&ffconfig.IsEndorser, "isEndorser", "e", false, "Defines if this node is a decoupled endorser node")
+	flags.StringSliceVar(&ffconfig.EndorserAddresses, "endorserAddr", []string{}, "The addresses of the decoupled endorser nodes. Can be set multiple times")
+	flags.StringVar(&ffconfig.StorageAddress, "storageAddr", "", "The address of the decoupled persistent storage node")
+	flags.StringVarP(&ffconfig.PeerAddress, "address", "a", "", "The address at which this peer listens for validated blocks. Use only on decoupled storage or endorser nodes.")
+	flags.BoolVarP(&ffconfig.IsBenchmark, "isBenchmark", "b", false, "Runs the peer in benchmarking mode. Times between block commits are logged to the file specified with the --output (-o) flag.")
+	flags.StringVarP(&benchmarkOutput, "output", "o", "benchmark.log", "Specifies the benchmark out put location.")
+	flags.StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to file")
 
 	return nodeStartCmd
 }
@@ -139,26 +139,26 @@ var nodeStartCmd = &cobra.Command{
 
 func serve(args []string) error {
 
-	if ffconfig.IsBenchmark{
+	if ffconfig.IsBenchmark {
 		f, err := os.OpenFile(benchmarkOutput, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
 		if err != nil {
 			panic(err)
 		}
-		stopwatch.SetOutput("commit_benchmark",f)
+		stopwatch.SetOutput("commit_benchmark", f)
 		logger.Info("Running in benchmarking mode")
 	}
 
-	if !ffconfig.IsStorage {
-		if !ffconfig.IsEndorser {
-			for _, address := range ffconfig.EndorserAddresses {
-				remote.StartEndorserPeerClient(address)
+	if ffconfig.StorageAddress != "" {
+		if err := remote.StartStoragePeerClient(ffconfig.StorageAddress); err != nil {
+			panic("Could not start the storage client")
+		}
+	}
+	if len(ffconfig.EndorserAddresses) != 0 {
+		for _, address := range ffconfig.EndorserAddresses {
+			if err := remote.StartEndorserPeerClient(address); err != nil {
+				panic(fmt.Sprintf("Could not start the endorser client for address %s", address))
 			}
 		}
-		if ffconfig.StorageAddress != "" {
-			remote.StartStoragePeerClient(ffconfig.StorageAddress)
-		}
-	}else{
-		logger.Info("Running as persistent peer")
 	}
 
 	if cpuprofile != "" {

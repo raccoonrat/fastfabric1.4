@@ -7,9 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 package ledgerstorage
 
 import (
-	fffsblkstorage "github.com/hyperledger/fabric/fastfabric-extensions/fsblkstorage"
-	"github.com/hyperledger/fabric/fastfabric-extensions/config"
 	"github.com/hyperledger/fabric/fastfabric-extensions/cached"
+	"github.com/hyperledger/fabric/fastfabric-extensions/config"
+	fffsblkstorage "github.com/hyperledger/fabric/fastfabric-extensions/fsblkstorage"
 	"sync"
 
 	"github.com/hyperledger/fabric/common/flogging"
@@ -52,7 +52,7 @@ func NewProvider() *Provider {
 	}
 	indexConfig := &blkstorage.IndexConfig{AttrsToIndex: attrsToIndex}
 	var blockStoreProvider blkstorage.BlockStoreProvider
-	if config.IsStorage {
+	if config.StorageAddress == "" {
 		blockStoreProvider = fsblkstorage.NewProvider(
 			fsblkstorage.NewConf(ledgerconfig.GetBlockStorePath(), ledgerconfig.GetMaxBlockfileSize()),
 			indexConfig)

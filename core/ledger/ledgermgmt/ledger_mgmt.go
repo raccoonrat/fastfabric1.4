@@ -84,7 +84,7 @@ func initialize(initializer *Initializer) {
 		panic(errors.WithMessage(err, "Error initializing ledger provider"))
 	}
 	ledgerProvider = provider
-	if config.IsStorage || config.IsEndorser{
+	if config.IsStorage || config.IsEndorser {
 		remote.SetCreateLedgerFunc(CreateLedger)
 		remote.StartServer(config.PeerAddress)
 	}
@@ -114,13 +114,13 @@ func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 	l = wrapLedger(id, l)
 	openedLedgers[id] = l
 
-	if !config.IsStorage && !config.IsEndorser {
+	if !config.IsStorage && config.StorageAddress != "" && !config.IsEndorser {
 		_, err := remote.GetStoragePeerClient().CreateLedger(context.Background(), &remote.StorageRequest{LedgerId: id, Block: genesisBlock})
-		if err!= nil{
+		if err != nil {
 			logger.Error(err)
 		}
 	}
-	if config.IsEndorser{
+	if config.IsEndorser {
 		remote.SetLedger(id, l)
 	}
 
