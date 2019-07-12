@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"sync"
 )
+
 var logger = util.GetLogger(util.ServiceLogger, "")
 
 type ledgerResources interface {
@@ -48,11 +49,11 @@ type GossipStateProviderImpl struct {
 
 	mediator *state.ServicesMediator
 	ledgerResources
- 	sClient remote.StoragePeerClient
+	sClient  remote.StoragePeerClient
 	eClients []remote.StoragePeerClient
-	done    sync.WaitGroup
-	once    sync.Once
-	stopCh  chan struct{}
+	done     sync.WaitGroup
+	once     sync.Once
+	stopCh   chan struct{}
 }
 
 func NewGossipStateProvider(chainID string, services *state.ServicesMediator, ledger ledgerResources, stateMetrics *metrics.StateMetrics, config *state.Configuration) state.GossipStateProvider {
@@ -86,11 +87,10 @@ func NewGossipStateProvider(chainID string, services *state.ServicesMediator, le
 	return gsp
 }
 
-
 func (s *GossipStateProviderImpl) deliverPayloads() {
 	go s.commit()
 
-	for pipelinedBlock := range parallel.ReadyForValidation{
+	for pipelinedBlock := range parallel.ReadyForValidation {
 		go s.validate(pipelinedBlock)
 	}
 	logger.Debug("State provider has been stopped, finishing to push new blocks.")
@@ -100,9 +100,9 @@ func (s *GossipStateProviderImpl) deliverPayloads() {
 func (s *GossipStateProviderImpl) commit() {
 	go s.store()
 
-	for blockPromise := range parallel.ReadyToCommit{
-		block, _ := <- blockPromise
-		if block!= nil{
+	for blockPromise := range parallel.ReadyToCommit {
+		block, _ := <-blockPromise
+		if block != nil {
 			s.buffer.Push(block)
 		}
 	}
@@ -119,11 +119,13 @@ func (s *GossipStateProviderImpl) store() {
 				return
 			}
 
-			go func(){
-				chanId,_:= block.GetChannelId()
-				s.sClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId:chanId})
-				for _,eClient := range s.eClients{
-					eClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId:chanId})
+			go func() {
+				chanId, _ := block.GetChannelId()
+				if config.StorageAddress != "" {
+					s.sClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId: chanId})
+				}
+				for _, eClient := range s.eClients {
+					eClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId: chanId})
 				}
 			}()
 
@@ -144,7 +146,7 @@ func (s *GossipStateProviderImpl) store() {
 
 func (s *GossipStateProviderImpl) validate(pipeline *parallel.Pipeline) {
 	defer close(pipeline.Channel)
-	if err := s.ledgerResources.ValidateBlock(pipeline.Block); err !=nil{
+	if err := s.ledgerResources.ValidateBlock(pipeline.Block); err != nil {
 		logger.Errorf("Validation failed: %+v", err)
 		return
 	}
@@ -165,4 +167,3 @@ func (s *GossipStateProviderImpl) Stop() {
 	})
 	s.GossipStateProvider.Stop()
 }
-
