@@ -2,7 +2,7 @@ Organizations:
   - &OrdererOrg
     Name: OrdererOrg
     ID: OrdererMSP
-    MSPDir: crypto-config/ordererOrganizations/ORDERER_DOMAIN/msp # change ORDERER_DOMAIN
+    MSPDir: crypto-config/ordererOrganizations/ORDERER_DOMAIN/msp
     Policies:
       Readers:
         Type: Signature
@@ -16,7 +16,7 @@ Organizations:
   - &Org1
     Name: Org1MSP
     ID: Org1MSP
-    MSPDir: crypto-config/peerOrganizations/PEER_DOMAIN/msp # change PEER_DOMAIN
+    MSPDir: crypto-config/peerOrganizations/PEER_DOMAIN/msp
     Policies:
       Readers:
         Type: Signature
@@ -28,7 +28,7 @@ Organizations:
         Type: Signature
         Rule: "OR('Org1MSP.admin')"
     AnchorPeers:
-      - Host: FAST_PEER_ADDRESS # change
+      - Host: FAST_PEER_ADDRESS
         Port: 7051
 
 Capabilities:
@@ -60,7 +60,7 @@ Application: &ApplicationDefaults
 Orderer: &OrdererDefaults
   OrdererType: solo
   Addresses:
-  - ORDERER_ADDRESS:7050 # change ORDERER_ADDRESS
+  - ORDERER_ADDRESS:7050
   BatchTimeout: 2s
   BatchSize:
     MaxMessageCount: 100

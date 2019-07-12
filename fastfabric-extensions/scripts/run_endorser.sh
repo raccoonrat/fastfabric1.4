@@ -6,4 +6,4 @@ export CORE_PEER_MSPCONFIGPATH=${FABRIC_CFG_PATH}/crypto-config/peerOrganization
 
 rm /var/hyperledger/production/* -r # clean up data from previous runs
 (cd ${FABRIC_ROOT}/peer/ && go install)
-peer node start -e -a ${ENDORSER_ADDRESS}:10000 --storageAddr ${STORAGE_ADDRESS}:10000
+peer node start -e -a $(get_correct_peer_address $(hostname)):10000 --storageAddr $(get_correct_peer_address ${STORAGE_ADDRESS}):10000

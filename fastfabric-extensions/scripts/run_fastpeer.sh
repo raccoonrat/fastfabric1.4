@@ -12,14 +12,14 @@ s=""
 if [[ ! -z ${STORAGE_ADDRESS} ]]
 then
     echo "Starting with decoupled storage server ${STORAGE_ADDRESS}"
-    s="--storageAddr ${STORAGE_ADDRESS}:10000"
+    s="--storageAddr $(get_correct_peer_address ${STORAGE_ADDRESS}):10000"
 fi
 
 e=""
 for i in ${ENDORSER_ADDRESS[@]}
 do
     echo "Starting with decoupled endorser server $i"
-    e="$e --endorserAddr $i:10000"
+    e="$e --endorserAddr $(get_correct_peer_address ${i}):10000"
 done
 peer node start ${s} ${e}
 
