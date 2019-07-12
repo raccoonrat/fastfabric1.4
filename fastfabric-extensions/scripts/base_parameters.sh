@@ -9,15 +9,15 @@ get_correct_address () {
         addr=$1
     fi
 
-    return ${addr}
+    echo ${addr}
 }
 
 get_correct_peer_address(){
-    return $(get_correct_address $1 ${PEER_DOMAIN})
+    echo $(get_correct_address $1 ${PEER_DOMAIN})
 }
 
 get_correct_orderer_address(){
-    return $(get_correct_address $ORDERER_ADDRESS ${ORDERER_DOMAIN})
+    echo $(get_correct_address $ORDERER_ADDRESS ${ORDERER_DOMAIN})
 }
 
 
