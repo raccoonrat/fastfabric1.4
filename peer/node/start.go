@@ -362,12 +362,14 @@ func serve(args []string) error {
 
 	policyMgr := peer.NewChannelPolicyManagerGetter()
 
-	// Initialize gossip component
-	err = initGossipService(policyMgr, metricsProvider, peerServer, serializedIdentity, peerEndpoint.Address)
-	if err != nil {
-		return err
+	if !ffconfig.IsStorage && !ffconfig.IsEndorser {
+		// Initialize gossip component
+		err = initGossipService(policyMgr, metricsProvider, peerServer, serializedIdentity, peerEndpoint.Address)
+		if err != nil {
+			return err
+		}
+		defer service.GetGossipService().Stop()
 	}
-	defer service.GetGossipService().Stop()
 
 	// register prover grpc service
 	// FAB-12971 disable prover service before v1.4 cut. Will uncomment after v1.4 cut
