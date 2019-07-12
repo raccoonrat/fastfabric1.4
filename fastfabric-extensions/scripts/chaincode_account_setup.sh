@@ -11,7 +11,7 @@ e_idx=0
 while [[ ${remainder} -gt 0 ]]
 do
     e_count=${#ENDORSER_ADDRESS[@]}
-    if [[ e_count == 0 ]]
+    if [[ e_count -eq 0 ]]
     then
         e_count=1
     fi
