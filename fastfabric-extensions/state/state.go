@@ -163,7 +163,7 @@ func (s *GossipStateProviderImpl) Stop() {
 		s.stopCh <- struct{}{}
 		// Make sure all go-routines has finished
 		s.done.Wait()
-
+		logger.Info("FastFabric GossipStateProvider has stopped.")
 	})
 	s.GossipStateProvider.Stop()
 }
