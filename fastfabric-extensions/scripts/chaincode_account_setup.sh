@@ -10,16 +10,17 @@ e_idx=0
 
 while [[ ${remainder} -gt 0 ]]
 do
-    e_count=${#ENDORSER_ADDRESS[@]}
-    if [[ e_count -eq 0 ]]
+    if [[ -z ${ENDORSER_ADDRESS[@]} ]]
     then
-        e_count=1
+        endorsers=(${FAST_PEER_ADDRESS})
+    else
+        endorsers=${ENDORSER_ADDRESS[@]}
     fi
 
-    i=$((e_idx % ${e_count}))
+    i=$((e_idx % ${#endorsers[@]}))
     e_idx=$((e_idx + 1))
 
-    export CORE_PEER_ADDRESS=$(get_correct_peer_address ${ENDORSER_ADDRESS[${i}]}):7051
+    export CORE_PEER_ADDRESS=$(get_correct_peer_address ${endorsers[${i}]}):7051
 
     if [[ ${remainder} -gt 100000 ]]
     then
