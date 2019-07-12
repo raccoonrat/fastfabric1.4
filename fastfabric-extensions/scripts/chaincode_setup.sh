@@ -11,4 +11,4 @@ echo peer chaincode instantiate -o ${ORDERER_ADDRESS}:7050 -C fastfabric -n benc
 
 sleep 5
 
-./chaincode_account_setup.sh $1 $2 $3
+bash chaincode_account_setup.sh $1 $2 $3
