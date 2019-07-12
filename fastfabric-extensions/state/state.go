@@ -121,7 +121,7 @@ func (s *GossipStateProviderImpl) store() {
 
 			go func() {
 				chanId, _ := block.GetChannelId()
-				if config.StorageAddress != "" {
+				if s.sClient != nil {
 					s.sClient.Store(context.Background(), &remote.StorageRequest{Block: block.Block, LedgerId: chanId})
 				}
 				for _, eClient := range s.eClients {
