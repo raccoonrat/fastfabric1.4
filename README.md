@@ -14,7 +14,7 @@ All described optimizations from the publication (except transaction header sepa
 - The Hyperledger Fabric prerequisites are installed
 - `$GOPATH` and `$GOPATH/bin` are added to `$PATH`
 - The instructions assume that the repository is cloned to `$GOPATH/src/github.com/hyperledger/fabric`
-- Add the `cryptogen`and `configtxgen` binaries to a new `./bin` folder
+- Add the `cryptogen`and `configtxgen` binaries to a new `$GOPATH/src/github.com/hyperledger/fabric/fastfabric-extensions/scripts/bin` folder
 
 ## Instructions
 
