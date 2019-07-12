@@ -16,7 +16,7 @@ do
         e_count=1
     fi
 
-    i=$((e_idx % ${#ENDORSER_ADDRESS[@]}))
+    i=$((e_idx % ${e_count}))
     e_idx=$((e_idx + 1))
 
     export CORE_PEER_ADDRESS=$(get_correct_peer_address ${ENDORSER_ADDRESS[${i}]}):7051
