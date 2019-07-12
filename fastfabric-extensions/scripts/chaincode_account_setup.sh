@@ -10,6 +10,12 @@ e_idx=0
 
 while [[ ${remainder} -gt 0 ]]
 do
+    e_count=${#ENDORSER_ADDRESS[@]}
+    if [[ e_count == 0 ]]
+    then
+        e_count=1
+    fi
+
     i=$((e_idx % ${#ENDORSER_ADDRESS[@]}))
     e_idx=$((e_idx + 1))
 
