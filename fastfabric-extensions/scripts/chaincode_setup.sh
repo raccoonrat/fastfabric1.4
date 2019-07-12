@@ -1,5 +1,5 @@
 #!/bin/bash
-./base_parameters.sh
+bash base_parameters.sh
 
 export CORE_PEER_ADDRESS=$ENDORSER_ADDRESS:7051
 export CORE_PEER_MSPCONFIGPATH=./crypto-config/peerOrganizations/$DOMAIN/users/Admin@$DOMAIN/msp

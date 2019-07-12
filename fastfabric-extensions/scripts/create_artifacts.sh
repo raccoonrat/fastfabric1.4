@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-./base_parameters.sh
+bash base_parameters.sh
 
 if [ ! -f crypto-config.yaml.bak ]; then
     cp crypto-config.yaml crypto-config.yaml.bak
@@ -8,7 +8,7 @@ fi
 (cat crypto-config.yaml.bak | sed "s/ORDERER_DOMAIN/$ORDERER_DOMAIN/g" | sed "s/ORDERER_ADDRESS/$ORDERER_ADDRESS/g"| sed "s/PEER_DOMAIN/$PEER_DOMAIN/g"| sed "s/FAST_PEER_ADDRESS/$FAST_PEER_ADDRESS/g") > crypto-config.yaml
 
 if [ ! -f configtx.yaml.bak ]; then
-    cp configtx.yaml
+    cp configtx.yaml configtx.yaml.bak
 fi
 (cat configtx.yaml.bak | sed "s/ORDERER_DOMAIN/$ORDERER_DOMAIN/g" | sed "s/ORDERER_ADDRESS/$ORDERER_ADDRESS/g"| sed "s/PEER_DOMAIN/$PEER_DOMAIN/g"| sed "s/FAST_PEER_ADDRESS/$FAST_PEER_ADDRESS/g") > configtx.yaml
 
