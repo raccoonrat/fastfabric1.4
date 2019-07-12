@@ -16,7 +16,7 @@ then
 fi
 
 e=""
-for i in ${ENDORSER_ADDRESS[@]} ]]
+for i in ${ENDORSER_ADDRESS[@]}
 do
     echo "Starting with decoupled endorser server $i"
     e="$e --endorserAddr $i:10000"
