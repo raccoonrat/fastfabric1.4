@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-./base_parameters.sh
+bash base_parameters.sh
 
 if [ ! -f crypto-config.yaml.bak ]; then
     cp crypto-config.yaml crypto-config.yaml.bak

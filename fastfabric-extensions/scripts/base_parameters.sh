@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-./custom_parameters.sh
+bash custom_parameters.sh
 
 export FABRIC_ROOT=$GOPATH/src/github.com/hyperledger/fabric
 export FABRIC_CFG_PATH=$FABRIC_ROOT/fastfabric-extensions/scripts #change this if you want to copy the script folder somewhere else before modifying it
